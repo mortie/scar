@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
-	"fmt"
-	"compress/gzip"
-	"bytes"
 )
 
 const (
@@ -59,17 +59,17 @@ func HdrFieldAfter(other HdrField, size uint) HdrField {
 type Block = [512]byte
 
 type EntryHeader struct {
-	ATime float64
-	GId int
-	GName []byte
+	ATime    float64
+	GId      int
+	GName    []byte
 	LinkPath []byte
-	MTime float64
-	Path []byte
-	Size int64
-	UId int
-	UName []byte
-	Type int
-	Mode int
+	MTime    float64
+	Path     []byte
+	Size     int64
+	UId      int
+	UName    []byte
+	Type     int
+	Mode     int
 	DevMajor int
 	DevMinor int
 }
@@ -107,7 +107,7 @@ func WriteAll(w io.Writer, buf []byte) error {
 
 func RoundBlock(size int64) int64 {
 	// I hope Go optimizes this?
-	for size % 512 != 0 {
+	for size%512 != 0 {
 		size += 1
 	}
 
@@ -359,9 +359,9 @@ func WritePaxSyntax(w io.Writer, content map[string][]byte) error {
 		size += 1 + len(k) + 1 + len(v) + 1 // ' ' key '=' val '\n'
 
 		digitCount := Log10Ceil(size)
-		digits := fmt.Sprintf("%d", size + digitCount)
+		digits := fmt.Sprintf("%d", size+digitCount)
 		if len(digits) != digitCount {
-			digits = fmt.Sprintf("%d", size + digitCount + 1)
+			digits = fmt.Sprintf("%d", size+digitCount+1)
 		}
 
 		_, err := fmt.Fprintf(w, "%s %s=", digits, k)
@@ -401,7 +401,7 @@ func ParsePaxSyntax(content []byte) (map[string][]byte, error) {
 			return pax, errors.New("Pax header length prefix too long")
 		}
 
-		if fieldStart + fieldLength > len(content) {
+		if fieldStart+fieldLength > len(content) {
 			return pax, errors.New("Pax header field too long")
 		}
 
@@ -418,7 +418,7 @@ func ParsePaxSyntax(content []byte) (map[string][]byte, error) {
 		}
 
 		payloadLength := fieldLength - (offset - fieldStart) - 1
-		payload := content[offset:offset + payloadLength]
+		payload := content[offset : offset+payloadLength]
 		offset += payloadLength
 
 		if content[offset] != '\n' {
@@ -439,7 +439,7 @@ type TarWriter interface {
 }
 
 type BasicTarWriter struct {
-	w io.Writer
+	w            io.Writer
 	WrittenCount int64
 }
 
@@ -472,15 +472,15 @@ type CompressedWriter interface {
 }
 
 type recordedFlush struct {
-	rawOffset int64
+	rawOffset        int64
 	compressedOffset int64
 }
 
 type CompressedTarWriter struct {
-	W *BasicTarWriter
-	Z CompressedWriter
+	W          *BasicTarWriter
+	Z          CompressedWriter
 	rawWritten int64
-	Flushes []recordedFlush
+	Flushes    []recordedFlush
 }
 
 func (tw *CompressedTarWriter) Write(p []byte) (int, error) {
@@ -519,7 +519,7 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 	indexEntryBuffer := bytes.Buffer{}
 
 	for {
-		if w.Written() > previousFlush + flushThreshold {
+		if w.Written() > previousFlush+flushThreshold {
 			w.Flush()
 			previousFlush = w.Written()
 		}
@@ -724,9 +724,9 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 
 			indexEntrySize := 1 + indexEntryBuffer.Len() // ' ' entry
 			digitCount := Log10Ceil(indexEntrySize)
-			digits := fmt.Sprintf("%d", indexEntrySize + digitCount)
+			digits := fmt.Sprintf("%d", indexEntrySize+digitCount)
 			if len(digits) != digitCount {
-				digits = fmt.Sprintf("%d", indexEntrySize + digitCount + 1)
+				digits = fmt.Sprintf("%d", indexEntrySize+digitCount+1)
 			}
 
 			_, err = fmt.Fprintf(iw, "%s ", digits)
@@ -770,7 +770,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo fun
 		return err
 	}
 
-	indexStartOffset := ctw.Flushes[len(ctw.Flushes) - 1].compressedOffset
+	indexStartOffset := ctw.Flushes[len(ctw.Flushes)-1].compressedOffset
 
 	_, err = ctw.Write(indexBuffer.Bytes())
 	if err != nil {
@@ -789,7 +789,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo fun
 		return err
 	}
 
-	for _, record := range ctw.Flushes[:len(ctw.Flushes) - 2] {
+	for _, record := range ctw.Flushes[:len(ctw.Flushes)-2] {
 		_, err = fmt.Fprintf(&ctw, "%d %d\n", record.compressedOffset, record.rawOffset)
 		if err != nil {
 			return err
@@ -826,10 +826,10 @@ func main() {
 
 	err := CreateIndexedCompressedTar(os.Stdin, os.Stdout, 1024, algo)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err);
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err);
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
 }
