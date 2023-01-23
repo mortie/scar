@@ -8,6 +8,9 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
+	"bufio"
+	"flag"
 )
 
 const (
@@ -46,6 +49,24 @@ var (
 	HDR_DEVMINOR    = HdrFieldAfter(HDR_DEVMAJOR, 8)
 	HDR_PREFIX      = HdrFieldAfter(HDR_DEVMINOR, 155)
 )
+
+var CompressAlgos = map[string]CompressAlgo {
+	"gzip": {
+		Magic: []byte{0x1f, 0x8b},
+		NewReader: func(r io.Reader) (io.ReadCloser, error) {
+			return gzip.NewReader(r)
+		},
+		NewWriter: func(w io.Writer) CompressedWriter {
+			return gzip.NewWriter(w)
+		},
+	},
+}
+
+type CompressAlgo struct {
+	Magic []byte
+	NewReader func(io.Reader) (io.ReadCloser, error)
+	NewWriter func(io.Writer) CompressedWriter
+}
 
 type HdrField struct {
 	Offset uint
@@ -471,7 +492,7 @@ type CompressedWriter interface {
 	Write([]byte) (int, error)
 }
 
-type recordedFlush struct {
+type RecordedFlush struct {
 	rawOffset        int64
 	compressedOffset int64
 }
@@ -480,7 +501,7 @@ type CompressedTarWriter struct {
 	W          *BasicTarWriter
 	Z          CompressedWriter
 	rawWritten int64
-	Flushes    []recordedFlush
+	Flushes    []RecordedFlush
 }
 
 func (tw *CompressedTarWriter) Write(p []byte) (int, error) {
@@ -498,7 +519,7 @@ func (tw *CompressedTarWriter) Flush() error {
 		return err
 	}
 
-	tw.Flushes = append(tw.Flushes, recordedFlush{tw.rawWritten, tw.W.Written() + 1})
+	tw.Flushes = append(tw.Flushes, RecordedFlush{tw.rawWritten, tw.W.Written()})
 
 	tw.Z.Reset(tw.W)
 	return nil
@@ -572,7 +593,13 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 		isUnknown := false
 
 		switch ParseType(headerBlock[HDR_TYPE.Offset]) {
-		case HDR_TYPE_FILE:
+		case HDR_TYPE_FILE: fallthrough
+		case HDR_TYPE_HARDLINK: fallthrough
+		case HDR_TYPE_SYMLINK: fallthrough
+		case HDR_TYPE_CHARDEV: fallthrough
+		case HDR_TYPE_BLOCKDEV: fallthrough
+		case HDR_TYPE_DIR: fallthrough
+		case HDR_TYPE_FIFO:
 			err := WriteAll(w, headerBlock[:])
 			if err != nil {
 				return err
@@ -749,7 +776,7 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 	return nil
 }
 
-func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo func(io.Writer) CompressedWriter) error {
+func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *CompressAlgo) error {
 	indexBuffer := bytes.Buffer{}
 	_, err := fmt.Fprintf(&indexBuffer, "SCAR-INDEX\n")
 	if err != nil {
@@ -757,7 +784,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo fun
 	}
 
 	btw := NewBasicTarWriter(w)
-	ctw := CompressedTarWriter{btw, algo(btw), 0, []recordedFlush{}}
+	ctw := CompressedTarWriter{btw, algo.NewWriter(btw), 0, []RecordedFlush{}}
 	defer ctw.Close()
 
 	err = CreateIndexedTar(r, &ctw, &indexBuffer, thresh)
@@ -819,17 +846,283 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo fun
 	return nil
 }
 
+func FindTail(r io.ReadSeeker) (int64, int64, *CompressAlgo, error) {
+	_, err := r.Seek(-512, io.SeekEnd)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	zTailBuf := [512]byte{}
+	zTailBufLength, err := r.Read(zTailBuf[:])
+	if err != nil {
+		if err != io.EOF || zTailBufLength == 0 {
+			return 0, 0, nil, err
+		}
+	}
+
+	tailBuf := [512]byte{}
+	tailMagic := []byte{'S', 'C', 'A', 'R', '-', 'T', 'A', 'I', 'L', '\n'}
+
+	for {
+		lastIndex := -1
+		var lastAlgo *CompressAlgo = nil
+		for _, algo := range CompressAlgos {
+			idx := bytes.LastIndex(zTailBuf[:zTailBufLength], algo.Magic)
+			if idx > lastIndex {
+				lastIndex = idx
+				lastAlgo = &algo
+			}
+		}
+
+		if lastAlgo == nil {
+			return 0, 0, nil, errors.New("Couldn't find scar footer at the end of archive.")
+		}
+
+		zTailReader := bytes.NewReader(zTailBuf[lastIndex:])
+		tailReader, err := lastAlgo.NewReader(zTailReader)
+		if err != nil {
+			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			continue
+		}
+
+		n, err := tailReader.Read(tailBuf[:])
+		if err != nil && err != io.EOF {
+			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			continue
+		}
+
+		if n < len(tailMagic) || !bytes.Equal(tailBuf[:len(tailMagic)], tailMagic) {
+			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			continue
+		}
+
+		tail := string(tailBuf[len(tailMagic):])
+		parts := strings.Split(tail, "\n")
+
+		if len(parts) < 2 {
+			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			continue
+		}
+
+		indexOffset, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			continue
+		}
+
+		chunksOffset, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			continue
+		}
+
+		return indexOffset, chunksOffset, lastAlgo, nil
+	}
+}
+
+func ReadIndexEntry(r *bufio.Reader, tmpbuf *bytes.Buffer) (map[string][]byte, error) {
+	digitsBuf := [32]byte{}
+	digitsLength := 0
+
+	for {
+		ch, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+
+		if ch == ' ' {
+			break
+		}
+
+		digitsBuf[digitsLength] = ch
+		digitsLength += 1
+
+		if digitsLength >= len(digitsBuf) {
+			return nil, errors.New("Entry length too big")
+		}
+	}
+
+	entryLength, err := strconv.ParseInt(string(digitsBuf[:digitsLength]), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	entryBodyLength := int(entryLength) - digitsLength - 1
+
+	tmpbuf.Reset()
+	tmpbuf.Grow(entryBodyLength)
+	_, err = io.CopyN(tmpbuf, r, int64(entryBodyLength))
+	if err != nil {
+		return nil, err
+	}
+
+	return ParsePaxSyntax(tmpbuf.Bytes())
+}
+
+func ListArchive(r io.ReadSeeker, w io.Writer) error {
+	indexOffset, _, algo, err := FindTail(r)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.Seek(indexOffset, io.SeekStart)
+	if err != nil {
+		return err
+	}
+
+	indexReader, err := algo.NewReader(r)
+	if err != nil {
+		return err
+	}
+	defer indexReader.Close()
+
+	indexBufReader := bufio.NewReader(indexReader)
+
+	indexMagic := []byte{'S', 'C', 'A', 'R', '-', 'I', 'N', 'D', 'E', 'X', '\n'}
+	magicBuf := make([]byte, len(indexMagic))
+	n, err := indexReader.Read(magicBuf[:])
+	if err != nil && err != io.EOF {
+		return err
+	} else if n != len(indexMagic) || !bytes.Equal(indexMagic[:], magicBuf[:]) {
+		return fmt.Errorf("Invalid index header magic: %v", magicBuf[:n])
+	}
+
+	chunksMagic := []byte{'S', 'C', 'A', 'R', '-', 'C', 'H', 'U', 'N', 'K', 'S', '\n'}
+
+	tmpbuf := bytes.NewBuffer(nil)
+	for {
+		chunksMagicBuf, err := indexBufReader.Peek(len(chunksMagic))
+		if err != nil {
+			return err
+		}
+
+		if bytes.Equal(chunksMagic, chunksMagicBuf) {
+			break
+		}
+
+		pax, err := ReadIndexEntry(indexBufReader, tmpbuf)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(w, "%s\n", pax["path"])
+	}
+
+	return nil
+}
+
 func main() {
-	algo := func(w io.Writer) CompressedWriter {
-		return gzip.NewWriter(w)
+	var err error
+
+	flag.Usage = func() {
+		w := flag.CommandLine.Output()
+		fmt.Fprintf(w, "Usage:\n")
+		fmt.Fprintf(w,
+			"  scar [options] add-index\n" +
+			"        Create a scar archive from the input file. "+
+			"Uses the compression algorithm given by the 'compression' option.\n")
+		fmt.Fprintf(w,
+			"  scar [options] cat files...\n" +
+			"        Read the given files\n")
+		fmt.Fprintf(w,
+			"  scar [options] subset patterns...\n" +
+			"        Output a tarball with files matching the given patterns.\n")
+		fmt.Fprintf(w,
+			"  scar [options] list\n" +
+			"        List arcive contents\n")
+
+		fmt.Fprintf(w, "\nOptions:\n")
+		flag.PrintDefaults()
+
+		fmt.Fprintf(w, "\nExamples:\n")
+		fmt.Fprintf(w,
+			"  tar c dir | scar add-index -o archive.tgz\n" +
+			"        Create a scar file\n")
+		fmt.Fprintf(w,
+			"  scar -i archive.tgz list\n" +
+			"        Read the list of files in the archive\n")
+		fmt.Fprintf(w,
+			"  scar -i archive.tgz cat ./dir/myfile.txt\n" +
+			"        Read a file from an archive\n")
+		fmt.Fprintf(w,
+			"  scar -i archive.tgz subset './dir/a/*' | tar x\n" +
+			"        Extract everything in './dir/a'\n")
 	}
 
-	err := CreateIndexedCompressedTar(os.Stdin, os.Stdout, 1024, algo)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	inFlag := flag.String("i", "-", "Input file, '-' for stdin.")
+	outFlag := flag.String("o", "-", "Output file, '-' for stdout.")
+	blocksizeFlag := flag.Int64("blocksize", 1024, "Approximate size of a block, in kiB.")
+	compressionFlag := flag.String("compression", "gzip", "Which compression algorithm to use.")
+	flag.Parse()
+
+	var inFile *os.File
+	if *inFlag == "-" {
+		inFile = os.Stdin
+	} else {
+		inFile, err = os.Open(*inFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", *inFlag, err)
+			os.Exit(1)
+		}
+	}
+	defer inFile.Close()
+
+	var outFile *os.File
+	if *outFlag == "-" {
+		outFile = os.Stdout
+	} else {
+		outFile, err = os.Create(*outFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", *inFlag, err)
+			os.Exit(1)
+		}
+	}
+	defer outFile.Close()
+
+	blockSize := *blocksizeFlag * 1024
+
+	var algo CompressAlgo
+	var ok bool
+	if algo, ok = CompressAlgos[*compressionFlag]; !ok {
+		fmt.Fprintf(os.Stderr, "Unsupported compression algorithm: '%s'.\n", *compressionFlag)
+		fmt.Fprintf(os.Stderr, "Available algorithms: gzip\n")
+		os.Exit(1)
 	}
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	if len(flag.Args()) < 1 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	subcommand := flag.Arg(0)
+	switch subcommand {
+	case "add-index":
+		err = CreateIndexedCompressedTar(inFile, outFile, blockSize, &algo)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "cat":
+		fmt.Fprintf(os.Stderr, "Subcommand not implemented: cat\n")
+		os.Exit(1)
+
+	case "subset":
+		fmt.Fprintf(os.Stderr, "Subcommand not implemented: subset\n")
+		os.Exit(1)
+
+	case "list":
+		err = ListArchive(inFile, outFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
+		flag.Usage()
+		os.Exit(1)
 	}
 }
