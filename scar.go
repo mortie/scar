@@ -439,7 +439,8 @@ func ParsePaxSyntax(content []byte) (map[string][]byte, error) {
 		}
 
 		payloadLength := fieldLength - (offset - fieldStart) - 1
-		payload := content[offset : offset+payloadLength]
+		payload := make([]byte, payloadLength)
+		copy(payload, content[offset : offset+payloadLength])
 		offset += payloadLength
 
 		if content[offset] != '\n' {
@@ -959,41 +960,37 @@ func ReadIndexEntry(r *bufio.Reader, tmpbuf *bytes.Buffer) (map[string][]byte, e
 	return ParsePaxSyntax(tmpbuf.Bytes())
 }
 
-func ListArchive(r io.ReadSeeker, w io.Writer) error {
-	indexOffset, _, algo, err := FindTail(r)
+func ReadIndex(r io.ReadSeeker, indexOffset int64, algo *CompressAlgo) ([]map[string][]byte, error) {
+	_, err := r.Seek(indexOffset, io.SeekStart)
 	if err != nil {
-		return err
-	}
-
-	_, err = r.Seek(indexOffset, io.SeekStart)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	indexReader, err := algo.NewReader(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer indexReader.Close()
 
 	indexBufReader := bufio.NewReader(indexReader)
 
-	indexMagic := []byte{'S', 'C', 'A', 'R', '-', 'I', 'N', 'D', 'E', 'X', '\n'}
+	indexMagic := []byte("SCAR-INDEX\n")
 	magicBuf := make([]byte, len(indexMagic))
 	n, err := indexReader.Read(magicBuf[:])
 	if err != nil && err != io.EOF {
-		return err
+		return nil, err
 	} else if n != len(indexMagic) || !bytes.Equal(indexMagic[:], magicBuf[:]) {
-		return fmt.Errorf("Invalid index header magic: %v", magicBuf[:n])
+		return nil, fmt.Errorf("Invalid index header magic: %v", magicBuf[:n])
 	}
 
-	chunksMagic := []byte{'S', 'C', 'A', 'R', '-', 'C', 'H', 'U', 'N', 'K', 'S', '\n'}
+	chunksMagic := []byte("SCAR-CHUNKS\n")
+	index := []map[string][]byte{}
 
 	tmpbuf := bytes.NewBuffer(nil)
 	for {
 		chunksMagicBuf, err := indexBufReader.Peek(len(chunksMagic))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if bytes.Equal(chunksMagic, chunksMagicBuf) {
@@ -1004,10 +1001,28 @@ func ListArchive(r io.ReadSeeker, w io.Writer) error {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			return nil, err
 		}
 
-		fmt.Fprintf(w, "%s\n", pax["path"])
+		index = append(index, pax)
+	}
+
+	return index, nil
+}
+
+func ListArchive(r io.ReadSeeker, w io.Writer) error {
+	indexOffset, _, algo, err := FindTail(r)
+	if err != nil {
+		return err
+	}
+
+	index, err := ReadIndex(r, indexOffset, algo)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range index {
+		fmt.Fprintf(w, "%s\n", string(entry["path"]))
 	}
 
 	return nil
