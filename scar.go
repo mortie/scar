@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"bufio"
-	"flag"
 )
 
 const (
@@ -493,16 +492,16 @@ type CompressedWriter interface {
 	Write([]byte) (int, error)
 }
 
-type RecordedFlush struct {
-	rawOffset        int64
-	compressedOffset int64
+type SeekPoint struct {
+	RawOffset        int64
+	CompressedOffset int64
 }
 
 type CompressedTarWriter struct {
 	W          *BasicTarWriter
 	Z          CompressedWriter
 	rawWritten int64
-	Flushes    []RecordedFlush
+	Flushes    []SeekPoint
 }
 
 func (tw *CompressedTarWriter) Write(p []byte) (int, error) {
@@ -520,7 +519,7 @@ func (tw *CompressedTarWriter) Flush() error {
 		return err
 	}
 
-	tw.Flushes = append(tw.Flushes, RecordedFlush{tw.rawWritten, tw.W.Written()})
+	tw.Flushes = append(tw.Flushes, SeekPoint{tw.rawWritten, tw.W.Written()})
 
 	tw.Z.Reset(tw.W)
 	return nil
@@ -785,7 +784,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *Co
 	}
 
 	btw := NewBasicTarWriter(w)
-	ctw := CompressedTarWriter{btw, algo.NewWriter(btw), 0, []RecordedFlush{}}
+	ctw := CompressedTarWriter{btw, algo.NewWriter(btw), 0, []SeekPoint{}}
 	defer ctw.Close()
 
 	err = CreateIndexedTar(r, &ctw, &indexBuffer, thresh)
@@ -798,7 +797,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *Co
 		return err
 	}
 
-	indexStartOffset := ctw.Flushes[len(ctw.Flushes)-1].compressedOffset
+	indexStartOffset := ctw.Flushes[len(ctw.Flushes)-1].CompressedOffset
 
 	_, err = ctw.Write(indexBuffer.Bytes())
 	if err != nil {
@@ -810,7 +809,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *Co
 		return err
 	}
 
-	chunksStartOffset := ctw.Written() + 1
+	chunksStartOffset := ctw.Flushes[len(ctw.Flushes)-1].CompressedOffset
 
 	_, err = fmt.Fprintf(&ctw, "SCAR-CHUNKS\n")
 	if err != nil {
@@ -818,7 +817,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *Co
 	}
 
 	for _, record := range ctw.Flushes[:len(ctw.Flushes)-2] {
-		_, err = fmt.Fprintf(&ctw, "%d %d\n", record.compressedOffset, record.rawOffset)
+		_, err = fmt.Fprintf(&ctw, "%d %d\n", record.CompressedOffset, record.RawOffset)
 		if err != nil {
 			return err
 		}
@@ -911,7 +910,7 @@ func FindTail(r io.ReadSeeker) (int64, int64, *CompressAlgo, error) {
 			continue
 		}
 
-		chunksOffset, err := strconv.ParseInt(parts[0], 10, 64)
+		chunksOffset, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
 			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
 			continue
@@ -1010,6 +1009,42 @@ func ReadIndex(r io.ReadSeeker, indexOffset int64, algo *CompressAlgo) ([]map[st
 	return index, nil
 }
 
+func ReadChunks(r io.ReadSeeker, chunksOffset int64, algo *CompressAlgo) ([]SeekPoint, error) {
+	_, err := r.Seek(chunksOffset, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+
+	chunksReader, err := algo.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+	defer chunksReader.Close()
+
+	chunks := []SeekPoint{}
+
+	chunksScanner := bufio.NewScanner(chunksReader)
+
+	chunksMagic := []byte("SCAR-CHUNKS")
+	if ! chunksScanner.Scan() || !bytes.Equal(chunksScanner.Bytes(), chunksMagic) {
+		return nil, errors.New("Missing SCAR-CHUNKS marker")
+	}
+
+	tailMagic := []byte("SCAR-TAIL")
+	for chunksScanner.Scan() {
+		line := chunksScanner.Bytes()
+		if bytes.Equal(line, tailMagic) {
+			return chunks, nil
+		}
+
+		var chunk SeekPoint
+		fmt.Sscanf(string(line), "%d %d", &chunk.CompressedOffset, &chunk.RawOffset)
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks, nil
+}
+
 func ListArchive(r io.ReadSeeker, w io.Writer) error {
 	indexOffset, _, algo, err := FindTail(r)
 	if err != nil {
@@ -1028,92 +1063,435 @@ func ListArchive(r io.ReadSeeker, w io.Writer) error {
 	return nil
 }
 
+func CatFile(
+		r io.ReadSeeker, w io.Writer, chunks []SeekPoint, offset int64,
+		algo *CompressAlgo, global map[string][]byte) error {
+	chunk := SeekPoint{0, 0}
+	for i := len(chunks) - 1; i >= 0; i-- {
+		ch := chunks[i]
+		if ch.RawOffset < offset {
+			chunk = ch
+			break
+		}
+	}
+
+	toSkip := offset - chunk.RawOffset
+
+	_, err := r.Seek(chunk.CompressedOffset, io.SeekStart)
+	if err != nil {
+		return err
+	}
+
+	zr, err := algo.NewReader(r)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.CopyN(io.Discard, zr, toSkip)
+	if err != nil {
+		return err
+	}
+
+	headerBlock := Block{}
+
+	next := map[string][]byte{}
+
+	for {
+		err := ReadAll(zr, headerBlock[:])
+		if err != nil {
+			return err
+		}
+
+		var size int64
+		if val, ok := next["size"]; ok {
+			size, err = strconv.ParseInt(string(val), 10, 64)
+			if err != nil {
+				return err
+			}
+		} else if val, ok := global["size"]; ok {
+			size, err = strconv.ParseInt(string(val), 10, 64)
+			if err != nil {
+				return err
+			}
+		} else {
+			size = ParseOctal255Field(&headerBlock, HDR_SIZE)
+		}
+
+		headerTypeCh := headerBlock[HDR_TYPE.Offset]
+		switch ParseType(headerTypeCh) {
+		case HDR_TYPE_FILE: fallthrough
+		case HDR_TYPE_HARDLINK: fallthrough
+		case HDR_TYPE_SYMLINK: fallthrough
+		case HDR_TYPE_CHARDEV: fallthrough
+		case HDR_TYPE_BLOCKDEV: fallthrough
+		case HDR_TYPE_DIR: fallthrough
+		case HDR_TYPE_FIFO:
+			_, err = io.CopyN(w, zr, size)
+			if err != nil {
+				return err
+			}
+
+			return nil
+
+		case HDR_TYPE_PAX_GLOBAL:
+			content, _, err := ReadFileContent(zr, size)
+			if err != nil {
+				return err
+			}
+
+			pax, err := ParsePaxSyntax(content)
+			if err != nil {
+				return err
+			}
+
+			for k, v := range pax {
+				global[k] = v
+			}
+
+		case HDR_TYPE_PAX_NEXT:
+			content, _, err := ReadFileContent(zr, size)
+
+			if err != nil {
+				return err
+			}
+
+			pax, err := ParsePaxSyntax(content)
+			if err != nil {
+				return err
+			}
+
+			for k, v := range pax {
+				next[k] = v
+			}
+
+		case HDR_TYPE_GNU_PATH:
+			content, _, err := ReadFileContent(zr, size)
+			if err != nil {
+				return err
+			}
+
+			next["path"] = content
+
+		case HDR_TYPE_GNU_LINK_PATH:
+			content, _, err := ReadFileContent(zr, size)
+			if err != nil {
+				return err
+			}
+
+			next["linkpath"] = content
+
+		default:
+			return fmt.Errorf("Unexpected file entry type in tar: '%c'", headerTypeCh)
+		}
+	}
+}
+
+func CatFiles(r io.ReadSeeker, w io.Writer, files []string) error {
+	indexOffset, chunksOffset, algo, err := FindTail(r)
+	if err != nil {
+		return err
+	}
+
+	index, err := ReadIndex(r, indexOffset, algo)
+	if err != nil {
+		return err
+	}
+
+	chunks, err := ReadChunks(r, chunksOffset, algo)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		found := false
+
+		for _, entry := range index {
+			if !bytes.Equal(entry["path"], []byte(file)) {
+				continue
+			}
+
+			found = true
+
+			offset, err := strconv.ParseInt(string(entry["scar:offset"]), 10, 64)
+			if err != nil {
+				return err
+			}
+
+			global := map[string][]byte{}
+			for k, v := range entry {
+				global[k] = v
+			}
+
+			pos, err := r.Seek(0, io.SeekCurrent)
+			if err != nil {
+				return err
+			}
+
+			err = CatFile(r, w, chunks, offset, algo, entry)
+			if err != nil {
+				return err
+			}
+
+			_, err = r.Seek(pos, io.SeekStart)
+			if err != nil {
+				return err
+			}
+
+			break
+		}
+
+		if !found {
+			return fmt.Errorf("No file entry: %s", file)
+		}
+	}
+
+	return nil
+}
+
+const (
+	FLAG_IFILE = iota
+	FLAG_OFILE
+	FLAG_SIZE
+	FLAG_ENUM
+	FLAG_BOOL
+)
+
+type cliFlag struct {
+	longname string;
+	shortname rune;
+	typ int;
+	ptr interface{};
+	desc string;
+	choices []string;
+}
+
+func iFileFlag(long string, short rune, ptr **os.File, desc string) cliFlag {
+	return cliFlag{long, short, FLAG_IFILE, ptr, desc, nil}
+}
+
+func oFileFlag(long string, short rune, ptr **os.File, desc string) cliFlag {
+	return cliFlag{long, short, FLAG_OFILE, ptr, desc, nil}
+}
+
+func sizeFlag(long string, short rune, ptr *int64, desc string) cliFlag {
+	return cliFlag{long, short, FLAG_SIZE, ptr, desc, nil}
+}
+
+func enumFlag(long string, short rune, ptr *string, desc string, choices ...string) cliFlag {
+	return cliFlag{long, short, FLAG_ENUM, ptr, desc, choices}
+}
+
+func boolFlag(long string, short rune, ptr *bool, desc string) cliFlag {
+	return cliFlag{long, short, FLAG_BOOL, ptr, desc, nil}
+}
+
+func parseFlag(flag *cliFlag, val string) error {
+	if flag.typ == FLAG_IFILE {
+		f, err := os.Open(val)
+		if err != nil {
+			return err
+		}
+		*flag.ptr.(**os.File) = f
+	} else if flag.typ == FLAG_OFILE {
+		f, err := os.Create(val)
+		if err != nil {
+			return err
+		}
+		*flag.ptr.(**os.File) = f
+	} else if flag.typ == FLAG_SIZE {
+		n, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return fmt.Errorf("%s: %w\n", val, err)
+		}
+		*flag.ptr.(*int64) = n
+	} else if flag.typ == FLAG_ENUM {
+		match := false
+		for _, v := range flag.choices {
+			if v == val {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			return fmt.Errorf("Expected one of: %v, got '%s'", flag.choices, val)
+		}
+
+		*flag.ptr.(*string) = val
+	} else if flag.typ == FLAG_BOOL {
+		if val == "false" {
+			*flag.ptr.(*bool) = false
+		} else if val == "true" {
+			*flag.ptr.(*bool) = true
+		} else {
+			return fmt.Errorf("Expected 'true' or 'false', got '%s'", val)
+		}
+	} else {
+		return errors.New("Invalid flag")
+	}
+
+	return nil
+}
+
+func parseFlags(argv []string, flags []cliFlag) ([]string, error) {
+	newArgv := []string{}
+
+	var i int
+	for i = 1; i < len(argv); i++ {
+		arg := argv[i]
+		if arg == "--" {
+			i += 1
+			break
+		}
+
+		var match *cliFlag = nil
+		key := ""
+		var val *string = nil
+		if arg[:1] == "-" {
+			if idx := strings.Index(arg, "="); idx >= 0 {
+				key = arg[:idx]
+				v := arg[idx + 1:]
+				val = &v
+			} else {
+				key = arg
+			}
+
+			for _, f := range flags {
+				if key == "-" + string(f.shortname) {
+					match = &f
+					break
+				} else if key[:2] == "-" + string(f.shortname) {
+					match = &f
+					v := key[2:]
+					val = &v
+					key = key[:2]
+					break
+				} else if key == "--" + arg {
+					match = &f
+					break
+				} else if f.typ == FLAG_BOOL && val == nil && arg == "--no-" + f.longname {
+					match = &f
+					v := "false"
+					val = &v
+					break
+				}
+			}
+		}
+
+		if arg[:1] == "-" {
+			if match == nil {
+				return nil, errors.New("Unknown flag: " + arg)
+			}
+
+			if val == nil && match.typ == FLAG_BOOL {
+				v := "true"
+				val = &v
+			}
+
+			if val == nil && i >= len(argv) - 1 {
+				return nil, errors.New("Flag " + key + " requires an argument")
+			} else if val == nil {
+				i += 1
+				val = &argv[i]
+			}
+
+			err := parseFlag(match, *val)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid value for %s: %w", key, err)
+			}
+		} else {
+			newArgv = append(newArgv, arg)
+		}
+	}
+
+	for j := i; j < len(argv); j++ {
+		newArgv = append(newArgv, argv[j])
+	}
+
+	return newArgv, nil
+}
+
+func usage(w io.Writer, flags []cliFlag) {
+	fmt.Fprintf(w, "Usage:\n")
+	fmt.Fprintf(w,
+		"  scar [options] create\n" +
+		"        Create a scar archive from the input file.\n"+
+		"        Uses the compression algorithm given by the 'compression' option.\n")
+	fmt.Fprintf(w,
+		"  scar [options] cat patterns...\n" +
+		"        Read files matching the patterns\n")
+	fmt.Fprintf(w,
+		"  scar [options] subset patterns...\n" +
+		"        Output a tarball with files matching the given patterns.\n")
+	fmt.Fprintf(w,
+		"  scar [options] list\n" +
+		"        List arcive contents\n")
+
+	fmt.Fprintf(w, "\nOptions:\n")
+	for _, flag := range flags {
+		fmt.Fprintf(w,
+			"  --%s, -%c:\n" +
+			"        %s\n",
+			flag.longname, flag.shortname, flag.desc)
+	}
+
+	fmt.Fprintf(w, "\nExamples:\n")
+	fmt.Fprintf(w,
+		"  tar c dir | scar create -o archive.tgz\n" +
+		"        Create a scar file\n")
+	fmt.Fprintf(w,
+		"  scar -i archive.tgz list\n" +
+		"        Read the list of files in the archive\n")
+	fmt.Fprintf(w,
+		"  scar -i archive.tgz cat ./dir/myfile.txt\n" +
+		"        Read a file from an archive\n")
+	fmt.Fprintf(w,
+		"  scar -i archive.tgz subset './dir/a/*' | tar x\n" +
+		"        Extract everything in './dir/a'\n")
+}
+
 func main() {
 	var err error
 
-	flag.Usage = func() {
-		w := flag.CommandLine.Output()
-		fmt.Fprintf(w, "Usage:\n")
-		fmt.Fprintf(w,
-			"  scar [options] add-index\n" +
-			"        Create a scar archive from the input file. "+
-			"Uses the compression algorithm given by the 'compression' option.\n")
-		fmt.Fprintf(w,
-			"  scar [options] cat files...\n" +
-			"        Read the given files\n")
-		fmt.Fprintf(w,
-			"  scar [options] subset patterns...\n" +
-			"        Output a tarball with files matching the given patterns.\n")
-		fmt.Fprintf(w,
-			"  scar [options] list\n" +
-			"        List arcive contents\n")
+	doHelp := false
+	inFile := os.Stdin
+	outFile := os.Stdout
+	blockSize := int64(256 * 1024)
+	compressionFlag := "gzip"
 
-		fmt.Fprintf(w, "\nOptions:\n")
-		flag.PrintDefaults()
-
-		fmt.Fprintf(w, "\nExamples:\n")
-		fmt.Fprintf(w,
-			"  tar c dir | scar add-index -o archive.tgz\n" +
-			"        Create a scar file\n")
-		fmt.Fprintf(w,
-			"  scar -i archive.tgz list\n" +
-			"        Read the list of files in the archive\n")
-		fmt.Fprintf(w,
-			"  scar -i archive.tgz cat ./dir/myfile.txt\n" +
-			"        Read a file from an archive\n")
-		fmt.Fprintf(w,
-			"  scar -i archive.tgz subset './dir/a/*' | tar x\n" +
-			"        Extract everything in './dir/a'\n")
+	flags := []cliFlag {
+		boolFlag("help", 'h', &doHelp, "Show this help text."),
+		iFileFlag("in", 'i', &inFile, "Input file ('-' for stdout)."),
+		oFileFlag("out", 'o', &outFile, "Output file ('-' for stdin)."),
+		sizeFlag("blocksize", 'b', &blockSize, "Approximate distance between seekpoints."),
+		enumFlag("compression", 'c', &compressionFlag, "Which compression algorithm to use.",
+			"gzip"),
 	}
 
-	inFlag := flag.String("i", "-", "Input file, '-' for stdin.")
-	outFlag := flag.String("o", "-", "Output file, '-' for stdout.")
-	blocksizeFlag := flag.Int64("blocksize", 1024, "Approximate size of a block, in kiB.")
-	compressionFlag := flag.String("compression", "gzip", "Which compression algorithm to use.")
-	flag.Parse()
+	argv, err := parseFlags(os.Args, flags)
 
-	var inFile *os.File
-	if *inFlag == "-" {
-		inFile = os.Stdin
-	} else {
-		inFile, err = os.Open(*inFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", *inFlag, err)
-			os.Exit(1)
-		}
-	}
-	defer inFile.Close()
-
-	var outFile *os.File
-	if *outFlag == "-" {
-		outFile = os.Stdout
-	} else {
-		outFile, err = os.Create(*outFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", *inFlag, err)
-			os.Exit(1)
-		}
-	}
-	defer outFile.Close()
-
-	blockSize := *blocksizeFlag * 1024
-
-	var algo CompressAlgo
-	var ok bool
-	if algo, ok = CompressAlgos[*compressionFlag]; !ok {
-		fmt.Fprintf(os.Stderr, "Unsupported compression algorithm: '%s'.\n", *compressionFlag)
-		fmt.Fprintf(os.Stderr, "Available algorithms: gzip\n")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n\n", err.Error())
+		usage(os.Stderr, flags)
 		os.Exit(1)
 	}
 
-	if len(flag.Args()) < 1 {
-		flag.Usage()
+	if doHelp {
+		usage(os.Stdout, flags)
+		os.Exit(0)
+	}
+
+	algo := CompressAlgos[compressionFlag]
+
+	if len(argv) < 1 {
+		usage(os.Stderr, flags)
 		os.Exit(1)
 	}
 
-	subcommand := flag.Arg(0)
+	subcommand := argv[0]
+	argv = argv[1:]
 	switch subcommand {
-	case "add-index":
+	case "create":
 		err = CreateIndexedCompressedTar(inFile, outFile, blockSize, &algo)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -1121,8 +1499,11 @@ func main() {
 		}
 
 	case "cat":
-		fmt.Fprintf(os.Stderr, "Subcommand not implemented: cat\n")
-		os.Exit(1)
+		err = CatFiles(inFile, outFile, argv)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 
 	case "subset":
 		fmt.Fprintf(os.Stderr, "Subcommand not implemented: subset\n")
@@ -1136,8 +1517,8 @@ func main() {
 		}
 
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
-		flag.Usage()
+		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n", subcommand)
+		usage(os.Stderr, flags)
 		os.Exit(1)
 	}
 }
