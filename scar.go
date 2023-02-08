@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"errors"
@@ -9,92 +10,75 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"bufio"
 )
 
 const (
-	HDR_TYPE_FILE = iota
-	HDR_TYPE_HARDLINK
-	HDR_TYPE_SYMLINK
-	HDR_TYPE_CHARDEV
-	HDR_TYPE_BLOCKDEV
-	HDR_TYPE_DIR
-	HDR_TYPE_FIFO
-	HDR_TYPE_PAX_NEXT
-	HDR_TYPE_PAX_GLOBAL
-	HDR_TYPE_GNU_PATH
-	HDR_TYPE_GNU_LINK_PATH
-	HDR_TYPE_UNKNOWN
+	hdrTypeFile = iota
+	hdrTypeHardlink
+	hdrTypeSymlink
+	hdrTypeChardev
+	hdrTypeBlockdev
+	hdrTypeDir
+	hdrTypeFifo
+	hdrTypePaxNext
+	hdrTypePaxGlobal
+	hdrTypeGnuPath
+	hdrTypeGnuLinkPath
+	hdrTypeUnknown
 )
 
 var (
 	// Old TAR header
-	HDR_PATH      = HdrField{0, 100}
-	HDR_MODE      = HdrFieldAfter(HDR_PATH, 8)
-	HDR_OWNER_UID = HdrFieldAfter(HDR_MODE, 8)
-	HDR_OWNER_GID = HdrFieldAfter(HDR_OWNER_UID, 8)
-	HDR_SIZE      = HdrFieldAfter(HDR_OWNER_GID, 12)
-	HDR_MTIME     = HdrFieldAfter(HDR_SIZE, 12)
-	HDR_CHKSUM    = HdrFieldAfter(HDR_MTIME, 8)
-	HDR_TYPE      = HdrFieldAfter(HDR_CHKSUM, 1)
-	HDR_LINK_PATH = HdrFieldAfter(HDR_TYPE, 100)
+	hdrPath     = hdrField{0, 100}
+	hdrMode     = hdrFieldAfter(hdrPath, 8)
+	hdrOwnerUid = hdrFieldAfter(hdrMode, 8)
+	hdrOwnerGid = hdrFieldAfter(hdrOwnerUid, 8)
+	hdrSize     = hdrFieldAfter(hdrOwnerGid, 12)
+	hdrMtime    = hdrFieldAfter(hdrSize, 12)
+	hdrChksum   = hdrFieldAfter(hdrMtime, 8)
+	hdrType     = hdrFieldAfter(hdrChksum, 1)
+	hdrLinkPath = hdrFieldAfter(hdrType, 100)
 
 	// UStar extension
-	HDR_MAGIC       = HdrFieldAfter(HDR_LINK_PATH, 6)
-	HDR_VERSION     = HdrFieldAfter(HDR_MAGIC, 2)
-	HDR_OWNER_UNAME = HdrFieldAfter(HDR_VERSION, 32)
-	HDR_OWNER_GNAME = HdrFieldAfter(HDR_OWNER_UNAME, 32)
-	HDR_DEVMAJOR    = HdrFieldAfter(HDR_OWNER_GNAME, 8)
-	HDR_DEVMINOR    = HdrFieldAfter(HDR_DEVMAJOR, 8)
-	HDR_PREFIX      = HdrFieldAfter(HDR_DEVMINOR, 155)
+	hdrMagic      = hdrFieldAfter(hdrLinkPath, 6)
+	hdrVersion    = hdrFieldAfter(hdrMagic, 2)
+	hdrOwnerUname = hdrFieldAfter(hdrVersion, 32)
+	hdrOwnerGname = hdrFieldAfter(hdrOwnerUname, 32)
+	hdrDevmajor   = hdrFieldAfter(hdrOwnerGname, 8)
+	hdrDevminor   = hdrFieldAfter(hdrDevmajor, 8)
+	hdrPrefix     = hdrFieldAfter(hdrDevminor, 155)
 )
 
-var CompressAlgos = map[string]CompressAlgo {
+var compressAlgos = map[string]compressAlgo{
 	"gzip": {
 		Magic: []byte{0x1f, 0x8b},
 		NewReader: func(r io.Reader) (io.ReadCloser, error) {
 			return gzip.NewReader(r)
 		},
-		NewWriter: func(w io.Writer) CompressedWriter {
+		NewWriter: func(w io.Writer) compressedWriter {
 			return gzip.NewWriter(w)
 		},
 	},
 }
 
-type CompressAlgo struct {
-	Magic []byte
+type compressAlgo struct {
+	Magic     []byte
 	NewReader func(io.Reader) (io.ReadCloser, error)
-	NewWriter func(io.Writer) CompressedWriter
+	NewWriter func(io.Writer) compressedWriter
 }
 
-type HdrField struct {
+type hdrField struct {
 	Offset uint
 	Length uint
 }
 
-func HdrFieldAfter(other HdrField, size uint) HdrField {
-	return HdrField{other.Offset + other.Length, size}
+func hdrFieldAfter(other hdrField, size uint) hdrField {
+	return hdrField{other.Offset + other.Length, size}
 }
 
-type Block = [512]byte
+type block = [512]byte
 
-type EntryHeader struct {
-	ATime    float64
-	GId      int
-	GName    []byte
-	LinkPath []byte
-	MTime    float64
-	Path     []byte
-	Size     int64
-	UId      int
-	UName    []byte
-	Type     int
-	Mode     int
-	DevMajor int
-	DevMinor int
-}
-
-func Log10Ceil(num int) int {
+func log10Ceil(num int) int {
 	log := 0
 	for num > 0 {
 		log += 1
@@ -103,7 +87,7 @@ func Log10Ceil(num int) int {
 	return log
 }
 
-func ReadAll(r io.Reader, buf []byte) error {
+func readAll(r io.Reader, buf []byte) error {
 	n, err := r.Read(buf)
 	if err != nil {
 		return err
@@ -114,7 +98,7 @@ func ReadAll(r io.Reader, buf []byte) error {
 	return nil
 }
 
-func WriteAll(w io.Writer, buf []byte) error {
+func writeAll(w io.Writer, buf []byte) error {
 	n, err := w.Write(buf)
 	if err != nil {
 		return err
@@ -125,7 +109,7 @@ func WriteAll(w io.Writer, buf []byte) error {
 	return nil
 }
 
-func RoundBlock(size int64) int64 {
+func roundBlock(size int64) int64 {
 	// I hope Go optimizes this?
 	for size%512 != 0 {
 		size += 1
@@ -134,7 +118,7 @@ func RoundBlock(size int64) int64 {
 	return size
 }
 
-func BufIsZero(buf []byte) bool {
+func bufIsZero(buf []byte) bool {
 	for _, ch := range buf {
 		if ch != 0 {
 			return false
@@ -144,40 +128,40 @@ func BufIsZero(buf []byte) bool {
 	return true
 }
 
-func ParseType(ch byte) int {
+func parseType(ch byte) int {
 	switch ch {
 	case 0:
-		return HDR_TYPE_FILE
+		return hdrTypeFile
 	case '0':
-		return HDR_TYPE_FILE
+		return hdrTypeFile
 	case '1':
-		return HDR_TYPE_HARDLINK
+		return hdrTypeHardlink
 	case '2':
-		return HDR_TYPE_SYMLINK
+		return hdrTypeSymlink
 	case '3':
-		return HDR_TYPE_CHARDEV
+		return hdrTypeChardev
 	case '4':
-		return HDR_TYPE_BLOCKDEV
+		return hdrTypeBlockdev
 	case '5':
-		return HDR_TYPE_DIR
+		return hdrTypeDir
 	case '6':
-		return HDR_TYPE_FIFO
+		return hdrTypeFifo
 	case '7':
-		return HDR_TYPE_FILE // really contiguous file but we treat it like a normal file
+		return hdrTypeFile // really contiguous file but we treat it like a normal file
 	case 'x':
-		return HDR_TYPE_PAX_NEXT
+		return hdrTypePaxNext
 	case 'g':
-		return HDR_TYPE_PAX_GLOBAL
+		return hdrTypePaxGlobal
 	case 'L':
-		return HDR_TYPE_GNU_PATH
+		return hdrTypeGnuPath
 	case 'K':
-		return HDR_TYPE_GNU_LINK_PATH
+		return hdrTypeGnuLinkPath
 	default:
-		return HDR_TYPE_UNKNOWN
+		return hdrTypeUnknown
 	}
 }
 
-func ParseStringField(block *Block, field HdrField) []byte {
+func parseStringField(block *block, field hdrField) []byte {
 	var strlength uint = 0
 	for {
 		if block[field.Offset+strlength] == 0 {
@@ -190,16 +174,16 @@ func ParseStringField(block *Block, field HdrField) []byte {
 	return block[field.Offset : field.Offset+strlength]
 }
 
-func ParsePathField(block *Block, field HdrField) []byte {
-	path := ParseStringField(block, field)
-	if block[HDR_PREFIX.Offset] == 0 {
+func parsePathField(block *block, field hdrField) []byte {
+	path := parseStringField(block, field)
+	if block[hdrPrefix.Offset] == 0 {
 		return path
 	} else {
-		return append(append(ParseStringField(block, HDR_PREFIX), byte('/')), path...)
+		return append(append(parseStringField(block, hdrPrefix), byte('/')), path...)
 	}
 }
 
-func ParseOctalField(block *Block, field HdrField) int64 {
+func parseOctalField(block *block, field hdrField) int64 {
 	length := int64(0)
 	for i := uint(0); i < field.Length; i++ {
 		ch := block[field.Offset+i]
@@ -214,7 +198,7 @@ func ParseOctalField(block *Block, field HdrField) int64 {
 	return length
 }
 
-func ParseOctal255Field(block *Block, field HdrField) int64 {
+func parseOctal255Field(block *block, field hdrField) int64 {
 	// GNU will set the first bit high, then treat the rest of the bytes as base 256
 	data := block[field.Offset : field.Offset+field.Length]
 	if data[0]&0b10000000 != 0 {
@@ -232,12 +216,12 @@ func ParseOctal255Field(block *Block, field HdrField) int64 {
 		return length
 	}
 
-	return ParseOctalField(block, field)
+	return parseOctalField(block, field)
 }
 
-func ReadFileContent(r io.Reader, size int64) ([]byte, []byte, error) {
-	buf := make([]byte, RoundBlock(size))
-	err := ReadAll(r, buf)
+func readFileContent(r io.Reader, size int64) ([]byte, []byte, error) {
+	buf := make([]byte, roundBlock(size))
+	err := readAll(r, buf)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -245,15 +229,15 @@ func ReadFileContent(r io.Reader, size int64) ([]byte, []byte, error) {
 	return buf[:size], buf, nil
 }
 
-func DumpFileContent(r io.Reader, w io.Writer, size int64) error {
-	block := Block{}
+func dumpFileContent(r io.Reader, w io.Writer, size int64) error {
+	block := block{}
 	for size > 0 {
-		err := ReadAll(r, block[:])
+		err := readAll(r, block[:])
 		if err != nil {
 			return err
 		}
 
-		err = WriteAll(w, block[:])
+		err = writeAll(w, block[:])
 		if err != nil {
 			return err
 		}
@@ -264,12 +248,12 @@ func DumpFileContent(r io.Reader, w io.Writer, size int64) error {
 	return nil
 }
 
-func WritePaxSyntax(w io.Writer, content map[string][]byte) error {
+func writePaxSyntax(w io.Writer, content map[string][]byte) error {
 	for k, v := range content {
 		size := 0
 		size += 1 + len(k) + 1 + len(v) + 1 // ' ' key '=' val '\n'
 
-		digitCount := Log10Ceil(size)
+		digitCount := log10Ceil(size)
 		digits := fmt.Sprintf("%d", size+digitCount)
 		if len(digits) != digitCount {
 			digits = fmt.Sprintf("%d", size+digitCount+1)
@@ -280,12 +264,12 @@ func WritePaxSyntax(w io.Writer, content map[string][]byte) error {
 			return err
 		}
 
-		err = WriteAll(w, v)
+		err = writeAll(w, v)
 		if err != nil {
 			return err
 		}
 
-		err = WriteAll(w, []byte("\n"))
+		err = writeAll(w, []byte("\n"))
 		if err != nil {
 			return err
 		}
@@ -294,7 +278,7 @@ func WritePaxSyntax(w io.Writer, content map[string][]byte) error {
 	return nil
 }
 
-func ParsePaxSyntax(content []byte) (map[string][]byte, error) {
+func parsePaxSyntax(content []byte) (map[string][]byte, error) {
 	pax := map[string][]byte{}
 
 	offset := 0
@@ -330,7 +314,7 @@ func ParsePaxSyntax(content []byte) (map[string][]byte, error) {
 
 		payloadLength := fieldLength - (offset - fieldStart) - 1
 		payload := make([]byte, payloadLength)
-		copy(payload, content[offset : offset+payloadLength])
+		copy(payload, content[offset:offset+payloadLength])
 		offset += payloadLength
 
 		if content[offset] != '\n' {
@@ -344,18 +328,18 @@ func ParsePaxSyntax(content []byte) (map[string][]byte, error) {
 	return pax, nil
 }
 
-type TarWriter interface {
+type tarWriter interface {
 	io.Writer
 	Flush() error
 	Written() int64
 }
 
-type BasicTarWriter struct {
+type basicTarWriter struct {
 	w            io.Writer
 	WrittenCount int64
 }
 
-func (tw *BasicTarWriter) Write(p []byte) (int, error) {
+func (tw *basicTarWriter) Write(p []byte) (int, error) {
 	n, err := tw.w.Write(p)
 	if err != nil {
 		return n, err
@@ -365,63 +349,63 @@ func (tw *BasicTarWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (tw *BasicTarWriter) Written() int64 {
+func (tw *basicTarWriter) Written() int64 {
 	return tw.WrittenCount
 }
 
-func (tw *BasicTarWriter) Flush() error {
+func (tw *basicTarWriter) Flush() error {
 	return nil
 }
 
-func NewBasicTarWriter(w io.Writer) *BasicTarWriter {
-	return &BasicTarWriter{w, 0}
+func newBasicTarWriter(w io.Writer) *basicTarWriter {
+	return &basicTarWriter{w, 0}
 }
 
-type CompressedWriter interface {
+type compressedWriter interface {
 	Close() error
 	Reset(io.Writer)
 	Write([]byte) (int, error)
 }
 
-type SeekPoint struct {
+type seekPoint struct {
 	RawOffset        int64
 	CompressedOffset int64
 }
 
-type CompressedTarWriter struct {
-	W          *BasicTarWriter
-	Z          CompressedWriter
+type compressedTarWriter struct {
+	W          *basicTarWriter
+	Z          compressedWriter
 	rawWritten int64
-	Flushes    []SeekPoint
+	Flushes    []seekPoint
 }
 
-func (tw *CompressedTarWriter) Write(p []byte) (int, error) {
+func (tw *compressedTarWriter) Write(p []byte) (int, error) {
 	tw.rawWritten += int64(len(p))
 	return tw.Z.Write(p)
 }
 
-func (tw *CompressedTarWriter) Written() int64 {
+func (tw *compressedTarWriter) Written() int64 {
 	return tw.W.Written()
 }
 
-func (tw *CompressedTarWriter) Flush() error {
+func (tw *compressedTarWriter) Flush() error {
 	err := tw.Z.Close()
 	if err != nil {
 		return err
 	}
 
-	tw.Flushes = append(tw.Flushes, SeekPoint{tw.rawWritten, tw.W.Written()})
+	tw.Flushes = append(tw.Flushes, seekPoint{tw.rawWritten, tw.W.Written()})
 
 	tw.Z.Reset(tw.W)
 	return nil
 }
 
-func (tw *CompressedTarWriter) Close() error {
+func (tw *compressedTarWriter) Close() error {
 	return tw.Z.Close()
 }
 
-func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int64) error {
-	headerBlock := Block{}
+func createIndexedTar(r io.Reader, w tarWriter, iw io.Writer, flushThreshold int64) error {
+	headerBlock := block{}
 
 	offset := int64(0)
 	next := map[string][]byte{}
@@ -436,29 +420,29 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 			previousFlush = w.Written()
 		}
 
-		err := ReadAll(r, headerBlock[:])
+		err := readAll(r, headerBlock[:])
 		if err != nil {
 			return err
 		}
 
 		// Two all-zero blocks in a row is an end marker
-		if BufIsZero(headerBlock[:]) {
-			err = WriteAll(w, headerBlock[:])
+		if bufIsZero(headerBlock[:]) {
+			err = writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = ReadAll(r, headerBlock[:])
+			err = readAll(r, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = WriteAll(w, headerBlock[:])
+			err = writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			if !BufIsZero(headerBlock[:]) {
+			if !bufIsZero(headerBlock[:]) {
 				return errors.New("Partial end marker")
 			}
 
@@ -477,41 +461,47 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 				return err
 			}
 		} else {
-			size = ParseOctal255Field(&headerBlock, HDR_SIZE)
+			size = parseOctal255Field(&headerBlock, hdrSize)
 		}
 
 		writeIndexEntry := true
 		isUnknown := false
 
-		switch ParseType(headerBlock[HDR_TYPE.Offset]) {
-		case HDR_TYPE_FILE: fallthrough
-		case HDR_TYPE_HARDLINK: fallthrough
-		case HDR_TYPE_SYMLINK: fallthrough
-		case HDR_TYPE_CHARDEV: fallthrough
-		case HDR_TYPE_BLOCKDEV: fallthrough
-		case HDR_TYPE_DIR: fallthrough
-		case HDR_TYPE_FIFO:
-			err := WriteAll(w, headerBlock[:])
+		switch parseType(headerBlock[hdrType.Offset]) {
+		case hdrTypeFile:
+			fallthrough
+		case hdrTypeHardlink:
+			fallthrough
+		case hdrTypeSymlink:
+			fallthrough
+		case hdrTypeChardev:
+			fallthrough
+		case hdrTypeBlockdev:
+			fallthrough
+		case hdrTypeDir:
+			fallthrough
+		case hdrTypeFifo:
+			err := writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = DumpFileContent(r, w, size)
+			err = dumpFileContent(r, w, size)
 			if err != nil {
 				return err
 			}
 
 			next = map[string][]byte{}
 
-		case HDR_TYPE_PAX_GLOBAL:
+		case hdrTypePaxGlobal:
 			writeIndexEntry = false
 
-			content, buf, err := ReadFileContent(r, size)
+			content, buf, err := readFileContent(r, size)
 			if err != nil {
 				return err
 			}
 
-			pax, err := ParsePaxSyntax(content)
+			pax, err := parsePaxSyntax(content)
 			if err != nil {
 				return err
 			}
@@ -520,25 +510,25 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 				global[k] = v
 			}
 
-			err = WriteAll(w, headerBlock[:])
+			err = writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = WriteAll(w, buf)
+			err = writeAll(w, buf)
 			if err != nil {
 				return err
 			}
 
-		case HDR_TYPE_PAX_NEXT:
-			content, buf, err := ReadFileContent(r, size)
+		case hdrTypePaxNext:
+			content, buf, err := readFileContent(r, size)
 			writeIndexEntry = false
 
 			if err != nil {
 				return err
 			}
 
-			pax, err := ParsePaxSyntax(content)
+			pax, err := parsePaxSyntax(content)
 			if err != nil {
 				return err
 			}
@@ -547,52 +537,52 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 				next[k] = v
 			}
 
-			err = WriteAll(w, headerBlock[:])
+			err = writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = WriteAll(w, buf)
+			err = writeAll(w, buf)
 			if err != nil {
 				return err
 			}
 
-		case HDR_TYPE_GNU_PATH:
+		case hdrTypeGnuPath:
 			writeIndexEntry = false
 
-			content, buf, err := ReadFileContent(r, size)
+			content, buf, err := readFileContent(r, size)
 			if err != nil {
 				return err
 			}
 
 			next["path"] = content
 
-			err = WriteAll(w, headerBlock[:])
+			err = writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = WriteAll(w, buf)
+			err = writeAll(w, buf)
 			if err != nil {
 				return err
 			}
 
-		case HDR_TYPE_GNU_LINK_PATH:
+		case hdrTypeGnuLinkPath:
 			writeIndexEntry = false
 
-			content, buf, err := ReadFileContent(r, size)
+			content, buf, err := readFileContent(r, size)
 			if err != nil {
 				return err
 			}
 
 			next["linkpath"] = content
 
-			err = WriteAll(w, headerBlock[:])
+			err = writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = WriteAll(w, buf)
+			err = writeAll(w, buf)
 			if err != nil {
 				return err
 			}
@@ -601,12 +591,12 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 			writeIndexEntry = false
 			isUnknown = true
 
-			err := WriteAll(w, headerBlock[:])
+			err := writeAll(w, headerBlock[:])
 			if err != nil {
 				return err
 			}
 
-			err = DumpFileContent(r, w, size)
+			err = dumpFileContent(r, w, size)
 			if err != nil {
 				return err
 			}
@@ -623,7 +613,7 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 			} else if val, ok := global["path"]; ok {
 				path = val
 			} else {
-				path = ParsePathField(&headerBlock, HDR_PATH)
+				path = parsePathField(&headerBlock, hdrPath)
 			}
 
 			pax := map[string][]byte{}
@@ -638,10 +628,10 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 			pax["path"] = path
 
 			indexEntryBuffer.Reset()
-			WritePaxSyntax(&indexEntryBuffer, pax)
+			writePaxSyntax(&indexEntryBuffer, pax)
 
 			indexEntrySize := 1 + indexEntryBuffer.Len() // ' ' entry
-			digitCount := Log10Ceil(indexEntrySize)
+			digitCount := log10Ceil(indexEntrySize)
 			digits := fmt.Sprintf("%d", indexEntrySize+digitCount)
 			if len(digits) != digitCount {
 				digits = fmt.Sprintf("%d", indexEntrySize+digitCount+1)
@@ -652,13 +642,13 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 				return err
 			}
 
-			err = WriteAll(iw, indexEntryBuffer.Bytes())
+			err = writeAll(iw, indexEntryBuffer.Bytes())
 			if err != nil {
 				return err
 			}
 		}
 
-		offset += 512 + RoundBlock(size)
+		offset += 512 + roundBlock(size)
 		if writeIndexEntry || isUnknown {
 			fileMetaStart = offset
 		}
@@ -667,18 +657,18 @@ func CreateIndexedTar(r io.Reader, w TarWriter, iw io.Writer, flushThreshold int
 	return nil
 }
 
-func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *CompressAlgo) error {
+func createIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *compressAlgo) error {
 	indexBuffer := bytes.Buffer{}
 	_, err := fmt.Fprintf(&indexBuffer, "SCAR-INDEX\n")
 	if err != nil {
 		return err
 	}
 
-	btw := NewBasicTarWriter(w)
-	ctw := CompressedTarWriter{btw, algo.NewWriter(btw), 0, []SeekPoint{}}
+	btw := newBasicTarWriter(w)
+	ctw := compressedTarWriter{btw, algo.NewWriter(btw), 0, []seekPoint{}}
 	defer ctw.Close()
 
-	err = CreateIndexedTar(r, &ctw, &indexBuffer, thresh)
+	err = createIndexedTar(r, &ctw, &indexBuffer, thresh)
 	if err != nil {
 		return err
 	}
@@ -737,7 +727,7 @@ func CreateIndexedCompressedTar(r io.Reader, w io.Writer, thresh int64, algo *Co
 	return nil
 }
 
-func FindTail(r io.ReadSeeker) (int64, int64, *CompressAlgo, error) {
+func findTail(r io.ReadSeeker) (int64, int64, *compressAlgo, error) {
 	_, err := r.Seek(-512, io.SeekEnd)
 	if err != nil {
 		return 0, 0, nil, err
@@ -756,8 +746,8 @@ func FindTail(r io.ReadSeeker) (int64, int64, *CompressAlgo, error) {
 
 	for {
 		lastIndex := -1
-		var lastAlgo *CompressAlgo = nil
-		for _, algo := range CompressAlgos {
+		var lastAlgo *compressAlgo = nil
+		for _, algo := range compressAlgos {
 			idx := bytes.LastIndex(zTailBuf[:zTailBufLength], algo.Magic)
 			if idx > lastIndex {
 				lastIndex = idx
@@ -811,7 +801,7 @@ func FindTail(r io.ReadSeeker) (int64, int64, *CompressAlgo, error) {
 	}
 }
 
-func ReadIndexEntry(r *bufio.Reader, tmpbuf *bytes.Buffer) (map[string][]byte, error) {
+func readIndexEntry(r *bufio.Reader, tmpbuf *bytes.Buffer) (map[string][]byte, error) {
 	digitsBuf := [32]byte{}
 	digitsLength := 0
 
@@ -847,10 +837,10 @@ func ReadIndexEntry(r *bufio.Reader, tmpbuf *bytes.Buffer) (map[string][]byte, e
 		return nil, err
 	}
 
-	return ParsePaxSyntax(tmpbuf.Bytes())
+	return parsePaxSyntax(tmpbuf.Bytes())
 }
 
-func ReadIndex(r io.ReadSeeker, indexOffset int64, algo *CompressAlgo) ([]map[string][]byte, error) {
+func readIndex(r io.ReadSeeker, indexOffset int64, algo *compressAlgo) ([]map[string][]byte, error) {
 	_, err := r.Seek(indexOffset, io.SeekStart)
 	if err != nil {
 		return nil, err
@@ -887,7 +877,7 @@ func ReadIndex(r io.ReadSeeker, indexOffset int64, algo *CompressAlgo) ([]map[st
 			break
 		}
 
-		pax, err := ReadIndexEntry(indexBufReader, tmpbuf)
+		pax, err := readIndexEntry(indexBufReader, tmpbuf)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -900,7 +890,7 @@ func ReadIndex(r io.ReadSeeker, indexOffset int64, algo *CompressAlgo) ([]map[st
 	return index, nil
 }
 
-func ReadChunks(r io.ReadSeeker, chunksOffset int64, algo *CompressAlgo) ([]SeekPoint, error) {
+func readChunks(r io.ReadSeeker, chunksOffset int64, algo *compressAlgo) ([]seekPoint, error) {
 	_, err := r.Seek(chunksOffset, io.SeekStart)
 	if err != nil {
 		return nil, err
@@ -912,12 +902,12 @@ func ReadChunks(r io.ReadSeeker, chunksOffset int64, algo *CompressAlgo) ([]Seek
 	}
 	defer chunksReader.Close()
 
-	chunks := []SeekPoint{}
+	chunks := []seekPoint{}
 
 	chunksScanner := bufio.NewScanner(chunksReader)
 
 	chunksMagic := []byte("SCAR-CHUNKS")
-	if ! chunksScanner.Scan() || !bytes.Equal(chunksScanner.Bytes(), chunksMagic) {
+	if !chunksScanner.Scan() || !bytes.Equal(chunksScanner.Bytes(), chunksMagic) {
 		return nil, errors.New("Missing SCAR-CHUNKS marker")
 	}
 
@@ -928,7 +918,7 @@ func ReadChunks(r io.ReadSeeker, chunksOffset int64, algo *CompressAlgo) ([]Seek
 			return chunks, nil
 		}
 
-		var chunk SeekPoint
+		var chunk seekPoint
 		fmt.Sscanf(string(line), "%d %d", &chunk.CompressedOffset, &chunk.RawOffset)
 		chunks = append(chunks, chunk)
 	}
@@ -936,13 +926,13 @@ func ReadChunks(r io.ReadSeeker, chunksOffset int64, algo *CompressAlgo) ([]Seek
 	return chunks, nil
 }
 
-func ListArchive(r io.ReadSeeker, w io.Writer) error {
-	indexOffset, _, algo, err := FindTail(r)
+func listArchive(r io.ReadSeeker, w io.Writer) error {
+	indexOffset, _, algo, err := findTail(r)
 	if err != nil {
 		return err
 	}
 
-	index, err := ReadIndex(r, indexOffset, algo)
+	index, err := readIndex(r, indexOffset, algo)
 	if err != nil {
 		return err
 	}
@@ -954,10 +944,10 @@ func ListArchive(r io.ReadSeeker, w io.Writer) error {
 	return nil
 }
 
-func CatFile(
-		r io.ReadSeeker, w io.Writer, chunks []SeekPoint, offset int64,
-		algo *CompressAlgo, global map[string][]byte) error {
-	chunk := SeekPoint{0, 0}
+func catFile(
+	r io.ReadSeeker, w io.Writer, chunks []seekPoint, offset int64,
+	algo *compressAlgo, global map[string][]byte) error {
+	chunk := seekPoint{0, 0}
 	for i := len(chunks) - 1; i >= 0; i-- {
 		ch := chunks[i]
 		if ch.RawOffset < offset {
@@ -983,12 +973,12 @@ func CatFile(
 		return err
 	}
 
-	headerBlock := Block{}
+	headerBlock := block{}
 
 	next := map[string][]byte{}
 
 	for {
-		err := ReadAll(zr, headerBlock[:])
+		err := readAll(zr, headerBlock[:])
 		if err != nil {
 			return err
 		}
@@ -1005,18 +995,24 @@ func CatFile(
 				return err
 			}
 		} else {
-			size = ParseOctal255Field(&headerBlock, HDR_SIZE)
+			size = parseOctal255Field(&headerBlock, hdrSize)
 		}
 
-		headerTypeCh := headerBlock[HDR_TYPE.Offset]
-		switch ParseType(headerTypeCh) {
-		case HDR_TYPE_FILE: fallthrough
-		case HDR_TYPE_HARDLINK: fallthrough
-		case HDR_TYPE_SYMLINK: fallthrough
-		case HDR_TYPE_CHARDEV: fallthrough
-		case HDR_TYPE_BLOCKDEV: fallthrough
-		case HDR_TYPE_DIR: fallthrough
-		case HDR_TYPE_FIFO:
+		headerTypeCh := headerBlock[hdrType.Offset]
+		switch parseType(headerTypeCh) {
+		case hdrTypeFile:
+			fallthrough
+		case hdrTypeHardlink:
+			fallthrough
+		case hdrTypeSymlink:
+			fallthrough
+		case hdrTypeChardev:
+			fallthrough
+		case hdrTypeBlockdev:
+			fallthrough
+		case hdrTypeDir:
+			fallthrough
+		case hdrTypeFifo:
 			_, err = io.CopyN(w, zr, size)
 			if err != nil {
 				return err
@@ -1024,13 +1020,13 @@ func CatFile(
 
 			return nil
 
-		case HDR_TYPE_PAX_GLOBAL:
-			content, _, err := ReadFileContent(zr, size)
+		case hdrTypePaxGlobal:
+			content, _, err := readFileContent(zr, size)
 			if err != nil {
 				return err
 			}
 
-			pax, err := ParsePaxSyntax(content)
+			pax, err := parsePaxSyntax(content)
 			if err != nil {
 				return err
 			}
@@ -1039,14 +1035,14 @@ func CatFile(
 				global[k] = v
 			}
 
-		case HDR_TYPE_PAX_NEXT:
-			content, _, err := ReadFileContent(zr, size)
+		case hdrTypePaxNext:
+			content, _, err := readFileContent(zr, size)
 
 			if err != nil {
 				return err
 			}
 
-			pax, err := ParsePaxSyntax(content)
+			pax, err := parsePaxSyntax(content)
 			if err != nil {
 				return err
 			}
@@ -1055,16 +1051,16 @@ func CatFile(
 				next[k] = v
 			}
 
-		case HDR_TYPE_GNU_PATH:
-			content, _, err := ReadFileContent(zr, size)
+		case hdrTypeGnuPath:
+			content, _, err := readFileContent(zr, size)
 			if err != nil {
 				return err
 			}
 
 			next["path"] = content
 
-		case HDR_TYPE_GNU_LINK_PATH:
-			content, _, err := ReadFileContent(zr, size)
+		case hdrTypeGnuLinkPath:
+			content, _, err := readFileContent(zr, size)
 			if err != nil {
 				return err
 			}
@@ -1077,18 +1073,18 @@ func CatFile(
 	}
 }
 
-func CatFiles(r io.ReadSeeker, w io.Writer, files []string) error {
-	indexOffset, chunksOffset, algo, err := FindTail(r)
+func catFiles(r io.ReadSeeker, w io.Writer, files []string) error {
+	indexOffset, chunksOffset, algo, err := findTail(r)
 	if err != nil {
 		return err
 	}
 
-	index, err := ReadIndex(r, indexOffset, algo)
+	index, err := readIndex(r, indexOffset, algo)
 	if err != nil {
 		return err
 	}
 
-	chunks, err := ReadChunks(r, chunksOffset, algo)
+	chunks, err := readChunks(r, chunksOffset, algo)
 	if err != nil {
 		return err
 	}
@@ -1118,7 +1114,7 @@ func CatFiles(r io.ReadSeeker, w io.Writer, files []string) error {
 				return err
 			}
 
-			err = CatFile(r, w, chunks, offset, algo, entry)
+			err = catFile(r, w, chunks, offset, algo, entry)
 			if err != nil {
 				return err
 			}
@@ -1140,62 +1136,62 @@ func CatFiles(r io.ReadSeeker, w io.Writer, files []string) error {
 }
 
 const (
-	FLAG_IFILE = iota
-	FLAG_OFILE
-	FLAG_SIZE
-	FLAG_ENUM
-	FLAG_BOOL
+	flagTypeIFile = iota
+	flagTypeOFile
+	flagTypeSize
+	flagTypeEnum
+	flagTypeBool
 )
 
 type cliFlag struct {
-	longname string;
-	shortname rune;
-	typ int;
-	ptr interface{};
-	desc string;
-	choices []string;
+	longname  string
+	shortname rune
+	typ       int
+	ptr       interface{}
+	desc      string
+	choices   []string
 }
 
 func iFileFlag(long string, short rune, ptr **os.File, desc string) cliFlag {
-	return cliFlag{long, short, FLAG_IFILE, ptr, desc, nil}
+	return cliFlag{long, short, flagTypeIFile, ptr, desc, nil}
 }
 
 func oFileFlag(long string, short rune, ptr **os.File, desc string) cliFlag {
-	return cliFlag{long, short, FLAG_OFILE, ptr, desc, nil}
+	return cliFlag{long, short, flagTypeOFile, ptr, desc, nil}
 }
 
 func sizeFlag(long string, short rune, ptr *int64, desc string) cliFlag {
-	return cliFlag{long, short, FLAG_SIZE, ptr, desc, nil}
+	return cliFlag{long, short, flagTypeSize, ptr, desc, nil}
 }
 
 func enumFlag(long string, short rune, ptr *string, desc string, choices ...string) cliFlag {
-	return cliFlag{long, short, FLAG_ENUM, ptr, desc, choices}
+	return cliFlag{long, short, flagTypeEnum, ptr, desc, choices}
 }
 
 func boolFlag(long string, short rune, ptr *bool, desc string) cliFlag {
-	return cliFlag{long, short, FLAG_BOOL, ptr, desc, nil}
+	return cliFlag{long, short, flagTypeBool, ptr, desc, nil}
 }
 
 func parseFlag(flag *cliFlag, val string) error {
-	if flag.typ == FLAG_IFILE {
+	if flag.typ == flagTypeIFile {
 		f, err := os.Open(val)
 		if err != nil {
 			return err
 		}
 		*flag.ptr.(**os.File) = f
-	} else if flag.typ == FLAG_OFILE {
+	} else if flag.typ == flagTypeOFile {
 		f, err := os.Create(val)
 		if err != nil {
 			return err
 		}
 		*flag.ptr.(**os.File) = f
-	} else if flag.typ == FLAG_SIZE {
+	} else if flag.typ == flagTypeSize {
 		n, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
 			return fmt.Errorf("%s: %w\n", val, err)
 		}
 		*flag.ptr.(*int64) = n
-	} else if flag.typ == FLAG_ENUM {
+	} else if flag.typ == flagTypeEnum {
 		match := false
 		for _, v := range flag.choices {
 			if v == val {
@@ -1209,7 +1205,7 @@ func parseFlag(flag *cliFlag, val string) error {
 		}
 
 		*flag.ptr.(*string) = val
-	} else if flag.typ == FLAG_BOOL {
+	} else if flag.typ == flagTypeBool {
 		if val == "false" {
 			*flag.ptr.(*bool) = false
 		} else if val == "true" {
@@ -1241,26 +1237,26 @@ func parseFlags(argv []string, flags []cliFlag) ([]string, error) {
 		if arg[:1] == "-" {
 			if idx := strings.Index(arg, "="); idx >= 0 {
 				key = arg[:idx]
-				v := arg[idx + 1:]
+				v := arg[idx+1:]
 				val = &v
 			} else {
 				key = arg
 			}
 
 			for _, f := range flags {
-				if key == "-" + string(f.shortname) {
+				if key == "-"+string(f.shortname) {
 					match = &f
 					break
-				} else if key[:2] == "-" + string(f.shortname) {
+				} else if key[:2] == "-"+string(f.shortname) {
 					match = &f
 					v := key[2:]
 					val = &v
 					key = key[:2]
 					break
-				} else if key == "--" + arg {
+				} else if key == "--"+arg {
 					match = &f
 					break
-				} else if f.typ == FLAG_BOOL && val == nil && arg == "--no-" + f.longname {
+				} else if f.typ == flagTypeBool && val == nil && arg == "--no-"+f.longname {
 					match = &f
 					v := "false"
 					val = &v
@@ -1274,12 +1270,12 @@ func parseFlags(argv []string, flags []cliFlag) ([]string, error) {
 				return nil, errors.New("Unknown flag: " + arg)
 			}
 
-			if val == nil && match.typ == FLAG_BOOL {
+			if val == nil && match.typ == flagTypeBool {
 				v := "true"
 				val = &v
 			}
 
-			if val == nil && i >= len(argv) - 1 {
+			if val == nil && i >= len(argv)-1 {
 				return nil, errors.New("Flag " + key + " requires an argument")
 			} else if val == nil {
 				i += 1
@@ -1305,40 +1301,40 @@ func parseFlags(argv []string, flags []cliFlag) ([]string, error) {
 func usage(w io.Writer, flags []cliFlag) {
 	fmt.Fprintf(w, "Usage:\n")
 	fmt.Fprintf(w,
-		"  scar [options] create\n" +
-		"        Create a scar archive from the input file.\n"+
-		"        Uses the compression algorithm given by the 'compression' option.\n")
+		"  scar [options] create\n"+
+			"        Create a scar archive from the input file.\n"+
+			"        Uses the compression algorithm given by the 'compression' option.\n")
 	fmt.Fprintf(w,
-		"  scar [options] cat patterns...\n" +
-		"        Read files matching the patterns\n")
+		"  scar [options] cat patterns...\n"+
+			"        Read files matching the patterns\n")
 	fmt.Fprintf(w,
-		"  scar [options] subset patterns...\n" +
-		"        Output a tarball with files matching the given patterns.\n")
+		"  scar [options] subset patterns...\n"+
+			"        Output a tarball with files matching the given patterns.\n")
 	fmt.Fprintf(w,
-		"  scar [options] list\n" +
-		"        List arcive contents\n")
+		"  scar [options] list\n"+
+			"        List arcive contents\n")
 
 	fmt.Fprintf(w, "\nOptions:\n")
 	for _, flag := range flags {
 		fmt.Fprintf(w,
-			"  --%s, -%c:\n" +
-			"        %s\n",
+			"  --%s, -%c:\n"+
+				"        %s\n",
 			flag.longname, flag.shortname, flag.desc)
 	}
 
 	fmt.Fprintf(w, "\nExamples:\n")
 	fmt.Fprintf(w,
-		"  tar c dir | scar create -o archive.tgz\n" +
-		"        Create a scar file\n")
+		"  tar c dir | scar create -o archive.tgz\n"+
+			"        Create a scar file\n")
 	fmt.Fprintf(w,
-		"  scar -i archive.tgz list\n" +
-		"        Read the list of files in the archive\n")
+		"  scar -i archive.tgz list\n"+
+			"        Read the list of files in the archive\n")
 	fmt.Fprintf(w,
-		"  scar -i archive.tgz cat ./dir/myfile.txt\n" +
-		"        Read a file from an archive\n")
+		"  scar -i archive.tgz cat ./dir/myfile.txt\n"+
+			"        Read a file from an archive\n")
 	fmt.Fprintf(w,
-		"  scar -i archive.tgz subset './dir/a/*' | tar x\n" +
-		"        Extract everything in './dir/a'\n")
+		"  scar -i archive.tgz subset './dir/a/*' | tar x\n"+
+			"        Extract everything in './dir/a'\n")
 }
 
 func main() {
@@ -1350,7 +1346,7 @@ func main() {
 	blockSize := int64(256 * 1024)
 	compressionFlag := "gzip"
 
-	flags := []cliFlag {
+	flags := []cliFlag{
 		boolFlag("help", 'h', &doHelp, "Show this help text."),
 		iFileFlag("in", 'i', &inFile, "Input file ('-' for stdout)."),
 		oFileFlag("out", 'o', &outFile, "Output file ('-' for stdin)."),
@@ -1372,7 +1368,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	algo := CompressAlgos[compressionFlag]
+	algo := compressAlgos[compressionFlag]
 
 	if len(argv) < 1 {
 		usage(os.Stderr, flags)
@@ -1383,14 +1379,14 @@ func main() {
 	argv = argv[1:]
 	switch subcommand {
 	case "create":
-		err = CreateIndexedCompressedTar(inFile, outFile, blockSize, &algo)
+		err = createIndexedCompressedTar(inFile, outFile, blockSize, &algo)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "cat":
-		err = CatFiles(inFile, outFile, argv)
+		err = catFiles(inFile, outFile, argv)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -1401,7 +1397,7 @@ func main() {
 		os.Exit(1)
 
 	case "list":
-		err = ListArchive(inFile, outFile)
+		err = listArchive(inFile, outFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
