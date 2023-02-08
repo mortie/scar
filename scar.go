@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -49,6 +50,211 @@ var (
 	hdrPrefix     = hdrFieldAfter(hdrDevminor, 155)
 )
 
+type compressedWriter interface {
+	Close() error
+	Reset(io.Writer)
+	Write([]byte) (int, error)
+}
+
+type cmdWriter struct {
+	name string
+	args []string
+	cmd *exec.Cmd
+	stdin io.WriteCloser
+	stdout io.ReadCloser
+	errCh chan error
+}
+
+func newCmdWriter(w io.Writer, name string, args ...string) *cmdWriter {
+	cw := cmdWriter{name, args, nil, nil, nil, nil}
+	err := cw.start(w)
+	if err != nil {
+		cw.errCh <- err
+	}
+
+	return &cw
+}
+
+func (cw *cmdWriter) start(w io.Writer) error {
+	cw.cmd = exec.Command(cw.name, cw.args...)
+
+	var err error
+
+	cw.stdin, err = cw.cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+
+	cw.stdout, err = cw.cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	cw.errCh = make(chan error, 1)
+
+	go func() {
+		buf := make([]byte, 16 * 1024)
+		for {
+			n, err := cw.stdout.Read(buf[:])
+			if err != nil {
+				cw.errCh <- err
+				return
+			}
+
+			err = writeAll(w, buf[:n])
+			if err != nil {
+				cw.errCh <- err
+				return
+			}
+		}
+	}()
+
+	return cw.cmd.Start()
+}
+
+func (cw *cmdWriter) Close() error {
+	err := cw.stdin.Close()
+	if err != nil {
+		return err
+	}
+
+	err = <-cw.errCh
+	if err != io.EOF {
+		return err
+	}
+
+	err = cw.cmd.Wait()
+	if err != nil {
+		return err
+	}
+
+	cw.cmd = nil
+	return nil
+}
+
+func (cw *cmdWriter) Reset(w io.Writer) {
+	if cw.cmd != nil {
+		err := cw.Close()
+		if err != nil {
+			cw.errCh <- err
+		}
+	}
+
+	err := cw.start(w)
+	if err != nil {
+		cw.errCh <- err
+	}
+}
+
+func (cw *cmdWriter) Write(buf []byte) (int, error) {
+	select {
+	case err := <-cw.errCh:
+		return 0, err
+	default:
+	}
+
+	return cw.stdin.Write(buf)
+}
+
+type cmdReader struct {
+	name string
+	args []string
+	cmd *exec.Cmd
+	stdin io.WriteCloser
+	stdout io.ReadCloser
+	errCh chan error
+}
+
+func newCmdReader(r io.Reader, name string, args ...string) (*cmdReader, error) {
+	cr := cmdReader{name, args, nil, nil, nil, nil}
+	err := cr.start(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cr, nil
+}
+
+func (cr *cmdReader) start(r io.Reader) error {
+	cr.cmd = exec.Command(cr.name, cr.args...)
+
+	var err error
+
+	cr.stdin, err = cr.cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+
+	cr.stdout, err = cr.cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	cr.errCh = make(chan error, 0)
+
+	go func() {
+		buf := make([]byte, 16 * 1024)
+		for {
+			n, err := r.Read(buf[:])
+
+			if err != nil {
+				cr.stdin.Close()
+				cr.errCh <- err
+				return
+			}
+
+			err = writeAll(cr.stdin, buf[:n])
+			if err != nil {
+				cr.stdin.Close()
+				cr.errCh <- err
+				return
+			}
+		}
+	}()
+
+	return cr.cmd.Start()
+}
+
+func (cr *cmdReader) Close() error {
+	err := cr.stdin.Close()
+	if err != nil {
+		return err
+	}
+
+	err = cr.cmd.Wait()
+	if err != nil {
+		return err
+	}
+
+	err = <-cr.errCh
+	if err != io.EOF {
+		return err
+	}
+
+	return nil
+}
+
+func (cr *cmdReader) Read(buf []byte) (int, error) {
+	numRead := 0
+	toRead := len(buf)
+	for toRead > 0 {
+		n, err := cr.stdout.Read(buf[numRead:])
+		numRead += n
+		toRead -= n
+		if err != nil {
+			return numRead, err
+		}
+	}
+
+	return numRead, nil
+}
+
+type compressAlgo struct {
+	Magic     []byte
+	NewReader func(io.Reader) (io.ReadCloser, error)
+	NewWriter func(io.Writer) compressedWriter
+}
+
 var compressAlgos = map[string]compressAlgo{
 	"gzip": {
 		Magic: []byte{0x1f, 0x8b},
@@ -59,12 +265,33 @@ var compressAlgos = map[string]compressAlgo{
 			return gzip.NewWriter(w)
 		},
 	},
-}
-
-type compressAlgo struct {
-	Magic     []byte
-	NewReader func(io.Reader) (io.ReadCloser, error)
-	NewWriter func(io.Writer) compressedWriter
+	"bzip2": {
+		Magic: []byte{0x42, 0x5a, 0x68},
+		NewReader: func(r io.Reader) (io.ReadCloser, error) {
+			return newCmdReader(r, "bzip2", "-d")
+		},
+		NewWriter: func(w io.Writer) compressedWriter {
+			return newCmdWriter(w, "bzip2")
+		},
+	},
+	"xz": {
+		Magic: []byte{0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00},
+		NewReader: func(r io.Reader) (io.ReadCloser, error) {
+			return newCmdReader(r, "xz", "-d")
+		},
+		NewWriter: func(w io.Writer) compressedWriter {
+			return newCmdWriter(w, "xz")
+		},
+	},
+	"zstd": {
+		Magic: []byte{0x28, 0xb5, 0x2f, 0xfd},
+		NewReader: func(r io.Reader) (io.ReadCloser, error) {
+			return newCmdReader(r, "zstd", "-d")
+		},
+		NewWriter: func(w io.Writer) compressedWriter {
+			return newCmdWriter(w, "zstd")
+		},
+	},
 }
 
 type hdrField struct {
@@ -359,12 +586,6 @@ func (tw *basicTarWriter) Flush() error {
 
 func newBasicTarWriter(w io.Writer) *basicTarWriter {
 	return &basicTarWriter{w, 0}
-}
-
-type compressedWriter interface {
-	Close() error
-	Reset(io.Writer)
-	Write([]byte) (int, error)
 }
 
 type seekPoint struct {
@@ -742,20 +963,20 @@ func findTail(r io.ReadSeeker) (int64, int64, *compressAlgo, error) {
 	}
 
 	tailBuf := [512]byte{}
-	tailMagic := []byte{'S', 'C', 'A', 'R', '-', 'T', 'A', 'I', 'L', '\n'}
+	tailMagic := []byte("SCAR-TAIL\n")
 
 	for {
 		lastIndex := -1
-		var lastAlgo *compressAlgo = nil
+		var lastAlgo compressAlgo
 		for _, algo := range compressAlgos {
 			idx := bytes.LastIndex(zTailBuf[:zTailBufLength], algo.Magic)
 			if idx > lastIndex {
 				lastIndex = idx
-				lastAlgo = &algo
+				lastAlgo = algo
 			}
 		}
 
-		if lastAlgo == nil {
+		if lastIndex < 0 {
 			return 0, 0, nil, errors.New("Couldn't find scar footer at the end of archive.")
 		}
 
@@ -763,17 +984,20 @@ func findTail(r io.ReadSeeker) (int64, int64, *compressAlgo, error) {
 		tailReader, err := lastAlgo.NewReader(zTailReader)
 		if err != nil {
 			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			fmt.Fprintf(os.Stderr, "Couldn't create reader: %v\n", err)
 			continue
 		}
 
 		n, err := tailReader.Read(tailBuf[:])
 		if err != nil && err != io.EOF {
 			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			fmt.Fprintf(os.Stderr, "Couldn't read (%d): %v\n", n, err)
 			continue
 		}
 
 		if n < len(tailMagic) || !bytes.Equal(tailBuf[:len(tailMagic)], tailMagic) {
 			zTailBufLength = lastIndex + len(lastAlgo.Magic) - 1
+			fmt.Fprintf(os.Stderr, "Bytes not equal (%v)\n", tailBuf[:len(tailMagic)])
 			continue
 		}
 
@@ -797,7 +1021,7 @@ func findTail(r io.ReadSeeker) (int64, int64, *compressAlgo, error) {
 			continue
 		}
 
-		return indexOffset, chunksOffset, lastAlgo, nil
+		return indexOffset, chunksOffset, &lastAlgo, nil
 	}
 }
 
@@ -1343,8 +1567,8 @@ func main() {
 	doHelp := false
 	inFile := os.Stdin
 	outFile := os.Stdout
-	blockSize := int64(256 * 1024)
-	compressionFlag := "gzip"
+	blockSize := int64(4 * 1024 * 1024)
+	compressionFlag := "auto"
 
 	flags := []cliFlag{
 		boolFlag("help", 'h', &doHelp, "Show this help text."),
@@ -1352,11 +1576,10 @@ func main() {
 		oFileFlag("out", 'o', &outFile, "Output file ('-' for stdin)."),
 		sizeFlag("blocksize", 'b', &blockSize, "Approximate distance between seekpoints."),
 		enumFlag("compression", 'c', &compressionFlag, "Which compression algorithm to use.",
-			"gzip"),
+			"auto", "gzip", "bzip2", "xz", "zstd"),
 	}
 
 	argv, err := parseFlags(os.Args, flags)
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n\n", err.Error())
 		usage(os.Stderr, flags)
@@ -1366,6 +1589,35 @@ func main() {
 	if doHelp {
 		usage(os.Stdout, flags)
 		os.Exit(0)
+	}
+
+	if compressionFlag == "auto" {
+		path := outFile.Name()
+		match := func(suffixes ...string) bool {
+			for _, s := range suffixes {
+				if strings.HasSuffix(path, s) {
+					return true
+				}
+			}
+
+			return false
+		}
+
+		if outFile == os.Stdout {
+			compressionFlag = "gzip"
+		} else if match(".taz", ".tgz", ".gz") {
+			compressionFlag = "gzip"
+		} else if match(".tb2", ".tbz", ".tbz2", ".tz2", "bz2") {
+			compressionFlag = "bzip2"
+		} else if match(".txz", ".xz") {
+			compressionFlag = "xz"
+		} else if match(".tzst", ".zst") {
+			compressionFlag = "zstd"
+		} else {
+			fmt.Fprintf(os.Stderr, "Couldn't guess compression based on file name: %s\n", path)
+			fmt.Fprintf(os.Stderr, "Use '--compression' to set compression algorithm.\n")
+			os.Exit(1)
+		}
 	}
 
 	algo := compressAlgos[compressionFlag]

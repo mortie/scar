@@ -147,6 +147,9 @@ The compressed data for the SCAR-TAIL section must be contained within 512 bytes
 The standard compression formats are:
 
 * **gzip**: magic bytes: `1f 8b`
+* **bzip2**: magic bytes: `42 5a 68`
+* **xz**: magic bytes: `fd 37 7a 58 00`
+* **zstd**: magic bytes: `28 b5 2f fd`
 
 ### Finding the SCAR-TAIL
 
