@@ -846,7 +846,7 @@ func createIndexedTar(r io.Reader, w tarWriter, iw io.Writer, flushThreshold int
 			}
 
 			pax["scar:offset"] = []byte(strconv.FormatInt(fileMetaStart, 10))
-			pax["path"] = path
+			pax["scar:path"] = path
 
 			indexEntryBuffer.Reset()
 			writePaxSyntax(&indexEntryBuffer, pax)
@@ -1162,7 +1162,11 @@ func listArchive(r io.ReadSeeker, w io.Writer) error {
 	}
 
 	for _, entry := range index {
-		fmt.Fprintf(w, "%s\n", string(entry["path"]))
+		if path, ok := entry["scar:path"]; ok {
+			fmt.Fprintf(w, "%s\n", string(path))
+		} else {
+			fmt.Fprintln(os.Stderr, "Entry with missing 'scar:path' field!")
+		}
 	}
 
 	return nil
@@ -1317,13 +1321,25 @@ func catFiles(r io.ReadSeeker, w io.Writer, files []string) error {
 		found := false
 
 		for _, entry := range index {
-			if !bytes.Equal(entry["path"], []byte(file)) {
+			var pathField []byte
+			var offsetField []byte
+			var ok bool
+
+			if pathField, ok = entry["scar:path"]; !ok {
+				return errors.New("Found an entry without a 'scar:path' fieldl")
+			}
+
+			if offsetField, ok = entry["scar:offset"]; !ok {
+				return errors.New("Found an entry without a 'scar:offset' fieldl")
+			}
+
+			if !bytes.Equal(pathField, []byte(file)) {
 				continue
 			}
 
 			found = true
 
-			offset, err := strconv.ParseInt(string(entry["scar:offset"]), 10, 64)
+			offset, err := strconv.ParseInt(string(offsetField), 10, 64)
 			if err != nil {
 				return err
 			}

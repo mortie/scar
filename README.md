@@ -51,10 +51,11 @@ The length of a pax extended header record also includes the length itself.
 A header entry with `path=foo` would look like `"12 path=foo\n"`, since it consists of 12 octets:
 3 octets for the `12` and space, 8 octets for the `path=foo`, and 1 octet for the line feed.
 
-The standard set of record types is those which are specified in the POSIX.1-2017, plus `scar:offset`.
+The standard set of record types is those which are specified in the POSIX.1-2017,
+plus `scar:offset` and `scar:path`.
 The `scar:offset` record specifies at which offset into the (uncompressed) tar body the file can be found.
 The rest of the record types are as specified in POSIX.1-2017.
-The `scar:offset` and the `path` records are mandatory, the rest are optional.
+The `scar:offset` and the `scar:path` records are mandatory, the rest are optional.
 The implementation _must_ ignore records it doesn't recognize.
 
 The implementation _must_ create a seek point before the start of the SCAR-INDEX section.
