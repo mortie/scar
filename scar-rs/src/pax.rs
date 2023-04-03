@@ -519,8 +519,89 @@ impl PaxMeta {
         }
     }
 
-    pub fn parse<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
-        Ok(())
+    pub fn parse<R: Read>(&mut self, r: &mut R) -> Result<(), Box<dyn Error>> {
+        let mut key = Vec::<u8>::new();
+
+        loop {
+            let mut size = 0isize;
+            let mut num_digits = 0isize;
+            let mut buf = [0u8; 1];
+            loop {
+                if r.read(&mut buf)? == 0 {
+                    return Ok(());
+                }
+
+                let ch = buf[0];
+                if ch == b' ' {
+                    break;
+                } else if ch < b'0' || ch > b'9' {
+                    return Err("Invalid pax field".into());
+                }
+
+                size *= 10;
+                size += (ch - b'0') as isize;
+                num_digits += 1;
+            }
+
+            let mut remaining_size = size - num_digits - 1;
+            key.clear();
+            loop {
+                if remaining_size < 1 {
+                    return Err("Invalid pax field: Unexpected EOF".into());
+                }
+
+                if r.read(&mut buf)? == 0 {
+                    return Err("Invalid pax field: Unexpected EOF".into());
+                }
+
+                remaining_size -= 1;
+                let ch = buf[0];
+                if ch == b'=' {
+                    break;
+                }
+
+                key.push(ch);
+            }
+
+            let mut val = Vec::<u8>::new();
+            val.resize((remaining_size - 1) as usize, 0);
+            r.read_exact(&mut val.as_mut_slice())?;
+
+            if r.read(&mut buf)? == 0 {
+                return Err("Invalid pax field: Unexpected EOF".into());
+            }
+            if buf[0] != b'\n' {
+                return Err("Invalid pax field: Expected newline".into());
+            }
+
+            if key == b"atime" {
+                self.atime = Some(std::str::from_utf8(val.as_slice())?.parse()?);
+            } else if key == b"charset" {
+                self.charset = Some(val);
+            } else if key == b"comment" {
+                self.comment = Some(val);
+            } else if key == b"gid" {
+                self.gid = Some(std::str::from_utf8(val.as_slice())?.parse()?);
+            } else if key == b"gname" {
+                self.gname = Some(val);
+            } else if key == b"hdrcharset" {
+                self.hdrcharset = Some(val);
+            } else if key == b"linkpath" {
+                self.linkpath = Some(val);
+            } else if key == b"mtime" {
+                self.mtime= Some(std::str::from_utf8(val.as_slice())?.parse()?);
+            } else if key == b"path" {
+                self.path = Some(val);
+            } else if key == b"size" {
+                self.size = Some(std::str::from_utf8(val.as_slice())?.parse()?);
+            } else if key == b"uid" {
+                self.uid = Some(std::str::from_utf8(val.as_slice())?.parse()?);
+            } else if key == b"uname" {
+                self.uname = Some(val);
+            } else {
+                eprintln!("Warning: Unknown pax key: {}", String::from_utf8_lossy(key.as_slice()));
+            }
+        }
     }
 }
 
