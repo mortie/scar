@@ -1,12 +1,15 @@
-use scar::compression::GzipCompressorFactory;
-use scar::write::ScarWriter;
+use scar::pax;
 use std::error::Error;
-use std::io::{self, Write};
+use std::io;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut scar_writer = ScarWriter::new(
-        Box::new(GzipCompressorFactory::new()),
-        Box::new(io::stdout()),
-    );
+    let mut reader = pax::PaxReader::new(io::stdin());
+    while let Some(meta) = reader.next_header()? {
+        println!("Found entry: {}", meta);
+        if meta.typeflag == pax::FileType::File {
+            reader.read_content(&mut io::sink(), meta.size)?;
+        }
+    }
+
     Ok(())
 }

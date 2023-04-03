@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt::Octal;
 use std::io::{self, BufReader, Read, Write};
 use std::mem::size_of;
+use std::fmt;
 
 #[derive(Copy, Clone)]
 pub struct UStarHdrField {
@@ -46,30 +47,70 @@ pub fn block_write_str(block: &mut Block, field: UStarHdrField, data: &[u8]) {
 pub fn block_write_octal(block: &mut Block, field: UStarHdrField, num: u64) {
     write!(
         &mut block[field.start..field.length],
-        "{:0>1$o}",
-        num % 8u64.pow(field.length as u32),
-        field.length
+        "{:0>1$o}\0",
+        num % 8u64.pow((field.length - 1) as u32),
+        field.length - 1
     )
     .unwrap();
 }
 
 pub fn block_read_octal(block: &Block, field: UStarHdrField) -> u64 {
-    0
+    let mut num = 0u64;
+    for i in field.start..(field.start + field.length) {
+        let ch = block[i];
+
+        if ch == b' ' || ch == b'\0' {
+            break;
+        }
+
+        num *= 8;
+        if ch >= b'0' && ch < b'8' {
+            num += (ch - b'0') as u64;
+        }
+    }
+
+    num
 }
 
 pub fn block_read_str(block: &Block, field: UStarHdrField) -> Vec<u8> {
-    Vec::new()
+    let mut len = 0usize;
+    for i in field.start..(field.start + field.length) {
+        if block[i] == b'\0' {
+            break;
+        }
+
+        len += 1;
+    }
+
+    Vec::from(&block[field.start..(field.start + len)])
 }
 
 pub fn block_read_path(block: &Block, field: UStarHdrField) -> Vec<u8> {
-    Vec::new()
+    let mut s = block_read_str(block, UST_PREFIX);
+    if s.len() == 0 {
+        return block_read_str(block, field);
+    }
+
+    s.push(b'/');
+    s.append(&mut block_read_str(block, field));
+    s
 }
 
 pub fn block_read_size(block: &Block, field: UStarHdrField) -> u64 {
-    0
+    if block[field.start] < 128 {
+        return block_read_octal(block, field);
+    }
+
+    let mut num = (block[field.start] & 0x7f) as u64;
+    for i in (field.start + 1)..(field.start + field.length) {
+        num *= 256;
+        num += block[i] as u64;
+    }
+
+    num
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum FileType {
     File,
     Hardlink,
@@ -111,7 +152,7 @@ impl FileType {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum MetaType {
     PaxNext,
     PaxGlobal,
@@ -140,6 +181,7 @@ impl MetaType {
     }
 }
 
+#[derive(Debug)]
 pub struct Metadata {
     pub typeflag: FileType,
     pub mode: u32,
@@ -158,6 +200,36 @@ pub struct Metadata {
     pub size: u64,
     pub uid: u64,
     pub uname: Vec<u8>,
+}
+
+impl fmt::Display for Metadata {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let fmt_option_str = |f: &mut fmt::Formatter, name: &str, s: &Option<Vec<u8>>| {
+            match s {
+                Some(s) => write!(f, "\t{}: Some({})\n", name, &String::from_utf8_lossy(s)),
+                None => write!(f, "\t{}: None\n", name),
+            }
+        };
+
+        write!(f, "Metadata{{\n")?;
+        write!(f, "\ttypeflag: {:?}\n", self.typeflag)?;
+        write!(f, "\tmode: 0{:o}\n", self.mode)?;
+        write!(f, "\tdevmajor: {}\n", self.devmajor)?;
+        write!(f, "\tdevminor: {}\n", self.devminor)?;
+        write!(f, "\tatime: {:?}\n", self.atime)?;
+        fmt_option_str(f, "charset", &self.charset)?;
+        fmt_option_str(f, "comment", &self.comment)?;
+        write!(f, "\tgid: {}\n", self.gid)?;
+        write!(f, "\tgname: {}\n", &String::from_utf8_lossy(self.gname.as_slice()))?;
+        fmt_option_str(f, "hdrcharset", &self.hdrcharset)?;
+        write!(f, "\tlinkpath: {}\n", &String::from_utf8_lossy(self.linkpath.as_slice()))?;
+        write!(f, "\tmtime: {}\n", self.mtime)?;
+        write!(f, "\tpath: {}\n", &String::from_utf8_lossy(self.path.as_slice()))?;
+        write!(f, "\tsize: {}\n", self.size)?;
+        write!(f, "\tuid: {}\n", self.uid)?;
+        write!(f, "\tuname: {}\n", &String::from_utf8_lossy(self.uname.as_slice()))?;
+        write!(f, "}}")
+    }
 }
 
 impl Metadata {
@@ -304,7 +376,7 @@ pub fn read_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> 
     }
 
     if count > 0 {
-        r.read_exact(&mut block[0..(count as usize)])?;
+        r.read_exact(&mut block)?;
         w.write_all(&block[0..(count as usize)])?;
     }
 
@@ -395,6 +467,7 @@ pub fn write_file<W: Write, R: Read>(w: &mut W, r: &mut R, meta: &Metadata) -> i
     write_content(w, r, meta.size)
 }
 
+#[derive(Debug)]
 pub struct PaxMeta {
     atime: Option<f64>,
     charset: Option<Vec<u8>>,
@@ -433,23 +506,25 @@ impl PaxMeta {
     }
 }
 
-pub struct PaxReader {
+pub struct PaxReader<R: Read> {
+    r: R,
     global_meta: PaxMeta,
 }
 
-impl PaxReader {
-    pub fn new() -> Self {
+impl<R: Read> PaxReader<R> {
+    pub fn new(r: R) -> Self {
         Self {
+            r,
             global_meta: PaxMeta::new(),
         }
     }
 
-    pub fn next_header<R: Read>(&mut self, r: &mut R) -> Result<Metadata, Box<dyn Error>> {
+    pub fn next_header(&mut self) -> Result<Option<Metadata>, Box<dyn Error>> {
         let mut next_meta = PaxMeta::new();
         let mut block = [0u8; size_of::<Block>()];
 
         loop {
-            r.read_exact(&mut block)?;
+            self.r.read_exact(&mut block)?;
             let typeflag = match MetaType::from_char(block[UST_TYPEFLAG.start]) {
                 Some(tf) => tf,
                 None => break,
@@ -457,13 +532,22 @@ impl PaxReader {
 
             let size = block_read_size(&block, UST_SIZE);
             let mut content = Vec::<u8>::new();
-            read_content(&mut content, r, size)?;
+            read_content(&mut content, &mut self.r, size)?;
 
             match typeflag {
                 MetaType::PaxNext => next_meta.parse(&mut content.as_slice())?,
                 MetaType::PaxGlobal => self.global_meta.parse(&mut content.as_slice())?,
                 MetaType::GnuPath => next_meta.path = Some(content),
                 MetaType::GnuLinkPath => next_meta.linkpath = Some(content),
+            }
+        }
+
+        if block.iter().all(|x| *x == 0) {
+            self.r.read_exact(&mut block)?;
+            if block.iter().all(|x| *x == 0) {
+                return Ok(None);
+            } else {
+                return Err("Incomplete end marker".into());
             }
         }
 
@@ -562,6 +646,10 @@ impl PaxReader {
             meta.uname = block_read_str(&block, UST_UNAME);
         }
 
-        Ok(Metadata::empty())
+        Ok(Some(meta))
+    }
+
+    pub fn read_content<W: Write>(&mut self, w: &mut W, size: u64) -> io::Result<()> {
+        read_content(w, &mut self.r, size)
     }
 }
