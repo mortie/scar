@@ -10,12 +10,18 @@ pub struct ContinuePoint {
     pub raw_loc: u64,
 }
 
-struct TrackedWrite {
-    w: Box<dyn Write>,
+pub struct TrackedWrite<W: Write> {
+    pub w: W,
     written: Rc<RefCell<u64>>,
 }
 
-impl Write for TrackedWrite {
+impl<W: Write> TrackedWrite<W> {
+    pub fn new(w: W, written: Rc<RefCell<u64>>) -> Self {
+        Self { w, written }
+    }
+}
+
+impl<W: Write> Write for TrackedWrite<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let num = self.w.write(buf)?;
         *self.written.borrow_mut() += num as u64;
@@ -34,10 +40,10 @@ struct IndexEntry {
 }
 
 pub struct ScarWriter {
+    pub w: TrackedWrite<Box<dyn Compressor>>,
     compressor_factory: Box<dyn CompressorFactory>,
-    compressor: Box<dyn Compressor>,
     compressed_loc: Rc<RefCell<u64>>,
-    raw_loc: u64,
+    raw_loc: Rc<RefCell<u64>>,
 
     continue_points: Vec<ContinuePoint>,
     scar_index: Vec<IndexEntry>,
@@ -49,17 +55,16 @@ pub struct ScarWriter {
 impl ScarWriter {
     pub fn new(cf: Box<dyn CompressorFactory>, w: Box<dyn Write>) -> Self {
         let compressed_loc = Rc::new(RefCell::new(0u64));
-        let tracked_write = Box::new(TrackedWrite {
-            w,
-            written: compressed_loc.clone(),
-        });
-        let compressor = cf.create_compressor(tracked_write);
+        let raw_loc = Rc::new(RefCell::new(0u64));
+        let compressor =
+            cf.create_compressor(Box::new(TrackedWrite::new(w, compressed_loc.clone())));
+        let writer = TrackedWrite::new(compressor, raw_loc.clone());
 
         Self {
+            w: writer,
             compressor_factory: cf,
-            compressor,
             compressed_loc,
-            raw_loc: 0u64,
+            raw_loc,
 
             continue_points: Vec::new(),
             scar_index: Vec::new(),
@@ -69,34 +74,49 @@ impl ScarWriter {
         }
     }
 
-    pub fn add_file<R: Read>(&mut self, meta: &pax::Metadata, r: R) -> io::Result<()> {
+    pub fn add_file<R: Read>(&mut self, r: &mut R, meta: &pax::Metadata) -> io::Result<()> {
+        self.add_entry(meta)?;
+        pax::write_content(&mut self.w, r, meta.size)?;
+        Ok(())
+    }
+
+    pub fn add_entry(&mut self, meta: &pax::Metadata) -> io::Result<()> {
         self.consider_checkpoint()?;
 
         self.scar_index.push(IndexEntry {
-            raw_loc: self.raw_loc,
+            raw_loc: *self.raw_loc.borrow(),
             typeflag: meta.typeflag,
             path: meta.path.clone(),
         });
 
-        pax::write_header(&mut self.compressor, meta)?;
-
+        pax::write_header(&mut self.w, meta)?;
         Ok(())
     }
 
+    pub fn finish(mut self) -> io::Result<Box<dyn Write>> {
+        let block = pax::new_block();
+        self.w.write_all(&block)?;
+        self.w.write_all(&block)?;
+
+        // TODO: Write the index and stuff
+
+        self.w.w.finish()
+    }
+
     fn consider_checkpoint(&mut self) -> io::Result<()> {
-        self.compressor.flush()?;
+        self.w.flush()?;
         let mut compressed_loc = *self.compressed_loc.borrow();
         if compressed_loc - self.last_checkpoint_compressed_loc > self.checkpoint_interval {
-            let w = self.compressor.finish()?;
+            let w = self.w.w.finish()?;
 
             compressed_loc = *self.compressed_loc.borrow();
             self.last_checkpoint_compressed_loc = compressed_loc;
             self.continue_points.push(ContinuePoint {
                 compressed_loc,
-                raw_loc: self.raw_loc,
+                raw_loc: *self.raw_loc.borrow(),
             });
 
-            self.compressor = self.compressor_factory.create_compressor(w);
+            self.w.w = self.compressor_factory.create_compressor(w);
         }
 
         Ok(())

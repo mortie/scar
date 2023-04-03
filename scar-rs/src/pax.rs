@@ -1,9 +1,9 @@
 use std::cmp::min;
 use std::error::Error;
+use std::fmt;
 use std::fmt::Octal;
 use std::io::{self, BufReader, Read, Write};
 use std::mem::size_of;
-use std::fmt;
 
 #[derive(Copy, Clone)]
 pub struct UStarHdrField {
@@ -39,14 +39,18 @@ ustar_field!(UST_PREFIX, 345, 155);
 
 pub type Block = [u8; 512];
 
+pub fn new_block() -> Block {
+    [0u8; size_of::<Block>()]
+}
+
 pub fn block_write_str(block: &mut Block, field: UStarHdrField, data: &[u8]) {
     let length = min(field.length, data.len());
-    block[field.start..length].copy_from_slice(&data[0..length])
+    block[field.start..(field.start + length)].copy_from_slice(&data[0..length])
 }
 
 pub fn block_write_octal(block: &mut Block, field: UStarHdrField, num: u64) {
     write!(
-        &mut block[field.start..field.length],
+        &mut block[field.start..(field.start + field.length)],
         "{:0>1$o}\0",
         num % 8u64.pow((field.length - 1) as u32),
         field.length - 1
@@ -204,11 +208,9 @@ pub struct Metadata {
 
 impl fmt::Display for Metadata {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let fmt_option_str = |f: &mut fmt::Formatter, name: &str, s: &Option<Vec<u8>>| {
-            match s {
-                Some(s) => write!(f, "\t{}: Some({})\n", name, &String::from_utf8_lossy(s)),
-                None => write!(f, "\t{}: None\n", name),
-            }
+        let fmt_option_str = |f: &mut fmt::Formatter, name: &str, s: &Option<Vec<u8>>| match s {
+            Some(s) => write!(f, "\t{}: Some({})\n", name, &String::from_utf8_lossy(s)),
+            None => write!(f, "\t{}: None\n", name),
         };
 
         write!(f, "Metadata{{\n")?;
@@ -220,14 +222,30 @@ impl fmt::Display for Metadata {
         fmt_option_str(f, "charset", &self.charset)?;
         fmt_option_str(f, "comment", &self.comment)?;
         write!(f, "\tgid: {}\n", self.gid)?;
-        write!(f, "\tgname: {}\n", &String::from_utf8_lossy(self.gname.as_slice()))?;
+        write!(
+            f,
+            "\tgname: {}\n",
+            &String::from_utf8_lossy(self.gname.as_slice())
+        )?;
         fmt_option_str(f, "hdrcharset", &self.hdrcharset)?;
-        write!(f, "\tlinkpath: {}\n", &String::from_utf8_lossy(self.linkpath.as_slice()))?;
+        write!(
+            f,
+            "\tlinkpath: {}\n",
+            &String::from_utf8_lossy(self.linkpath.as_slice())
+        )?;
         write!(f, "\tmtime: {}\n", self.mtime)?;
-        write!(f, "\tpath: {}\n", &String::from_utf8_lossy(self.path.as_slice()))?;
+        write!(
+            f,
+            "\tpath: {}\n",
+            &String::from_utf8_lossy(self.path.as_slice())
+        )?;
         write!(f, "\tsize: {}\n", self.size)?;
         write!(f, "\tuid: {}\n", self.uid)?;
-        write!(f, "\tuname: {}\n", &String::from_utf8_lossy(self.uname.as_slice()))?;
+        write!(
+            f,
+            "\tuname: {}\n",
+            &String::from_utf8_lossy(self.uname.as_slice())
+        )?;
         write!(f, "}}")
     }
 }
@@ -507,7 +525,7 @@ impl PaxMeta {
 }
 
 pub struct PaxReader<R: Read> {
-    r: R,
+    pub r: R,
     global_meta: PaxMeta,
 }
 
