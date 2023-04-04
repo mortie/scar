@@ -54,10 +54,12 @@ without changing anything about the tar body.
 The other metadata entry types (pax's `x`, GNU's `L` and `K`) are not legal as typeflags
 in index entries.
 
-**Note:** The length of an index entry includes the length itself.
+The implementation _must_ create `g` index entries to correspond to the non-empty `g` file objects
+in the tar body, such that all of a file's metadata can be found without scanning through the tar
+body.
 
-The implementation _must_ create `g` entries to correspond to the `g` file entries in the tar body,
-such that all of a file's metadata can be found without scanning through the tar body.
+The implementation _must not_ create entries for empty `g` file objects  (i.e file objects with no
+extended header records). This is to make sure that all index entries start on a new line.
 
 The implementation _must_ create a seek point before the start of the SCAR-INDEX section.
 
