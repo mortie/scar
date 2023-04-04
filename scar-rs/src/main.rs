@@ -7,12 +7,11 @@ use std::io::{self, Read, Write};
 fn main() -> Result<(), Box<dyn Error>> {
     let mut reader = PaxReader::new(io::stdin());
     let mut writer = ScarWriter::new(
-        Box::new(compression::GzipCompressorFactory::new()),
+        Box::new(compression::GzipCompressorFactory::new(6)),
         Box::new(io::stdout()),
     );
 
     while let Some(meta) = reader.next_header()? {
-        eprintln!("Found entry: {}", meta);
         writer.add_entry(&meta)?;
 
         if meta.typeflag == pax::FileType::File {

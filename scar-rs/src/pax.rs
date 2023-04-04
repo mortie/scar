@@ -4,6 +4,7 @@ use std::fmt;
 use std::fmt::Octal;
 use std::io::{self, BufReader, Read, Write};
 use std::mem::size_of;
+use crate::util;
 
 #[derive(Copy, Clone)]
 pub struct UStarHdrField {
@@ -127,7 +128,7 @@ pub enum FileType {
 }
 
 impl FileType {
-    fn char(self) -> u8 {
+    pub fn char(self) -> u8 {
         match self {
             Self::File => b'0',
             Self::Hardlink => b'1',
@@ -140,7 +141,7 @@ impl FileType {
         }
     }
 
-    fn from_char(ch: u8) -> Self {
+    pub fn from_char(ch: u8) -> Self {
         match ch {
             b'0' => Self::File,
             b'\0' => Self::File,
@@ -321,20 +322,10 @@ impl Metadata {
     }
 }
 
-fn log10_ceil(mut num: usize) -> usize {
-    let mut log = 0;
-    while num > 0 {
-        log += 1;
-        num /= 10;
-    }
-
-    log
-}
-
 pub fn write_pax_bytes<W: Write>(w: &mut W, key: &[u8], val: &[u8]) -> io::Result<()> {
     let size = 1 + key.len() + 1 + val.len() + 1; // ' ' key '=' val '\n'
-    let mut digit_count = log10_ceil(size);
-    if log10_ceil(size + digit_count) > digit_count {
+    let mut digit_count = util::log10_ceil(size);
+    if util::log10_ceil(size + digit_count) > digit_count {
         digit_count += 1;
     }
 
@@ -589,7 +580,7 @@ impl PaxMeta {
             } else if key == b"linkpath" {
                 self.linkpath = Some(val);
             } else if key == b"mtime" {
-                self.mtime= Some(std::str::from_utf8(val.as_slice())?.parse()?);
+                self.mtime = Some(std::str::from_utf8(val.as_slice())?.parse()?);
             } else if key == b"path" {
                 self.path = Some(val);
             } else if key == b"size" {
@@ -599,7 +590,10 @@ impl PaxMeta {
             } else if key == b"uname" {
                 self.uname = Some(val);
             } else {
-                eprintln!("Warning: Unknown pax key: {}", String::from_utf8_lossy(key.as_slice()));
+                eprintln!(
+                    "Warning: Unknown pax key: {}",
+                    String::from_utf8_lossy(key.as_slice())
+                );
             }
         }
     }

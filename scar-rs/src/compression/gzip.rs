@@ -3,18 +3,6 @@ use flate2;
 use std::error::Error;
 use std::io::{self, Write};
 
-pub struct GzipCompressorFactory {
-    level: flate2::Compression,
-}
-
-impl GzipCompressorFactory {
-    pub fn new() -> Self {
-        Self {
-            level: flate2::Compression::new(5),
-        }
-    }
-}
-
 struct GzipCompressor {
     w: Option<flate2::write::GzEncoder<Box<dyn Write>>>,
 }
@@ -32,6 +20,18 @@ impl Write for GzipCompressor {
 impl Compressor for GzipCompressor {
     fn finish(&mut self) -> io::Result<Box<dyn Write>> {
         self.w.take().unwrap().finish()
+    }
+}
+
+pub struct GzipCompressorFactory {
+    level: flate2::Compression,
+}
+
+impl GzipCompressorFactory {
+    pub fn new(level: u32) -> Self {
+        Self {
+            level: flate2::Compression::new(level),
+        }
     }
 }
 
