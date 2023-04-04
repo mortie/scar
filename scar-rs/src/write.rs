@@ -36,7 +36,7 @@ impl<W: Write> Write for TrackedWrite<W> {
 
 struct IndexEntry {
     pub raw_loc: u64,
-    pub typeflag: pax::FileType,
+    pub typeflag: u8,
     pub data: Vec<u8>,
 }
 
@@ -86,11 +86,27 @@ impl ScarWriter {
 
         self.scar_index.push(IndexEntry {
             raw_loc: self.raw_loc.load(Ordering::Relaxed),
-            typeflag: meta.typeflag,
+            typeflag: meta.typeflag.char(),
             data: meta.path.clone(),
         });
 
         pax::write_header(&mut self.w, meta)?;
+        Ok(())
+    }
+
+    pub fn add_global_meta(&mut self, meta: &pax::PaxMeta) -> io::Result<()> {
+        self.consider_checkpoint()?;
+
+        let loc = self.raw_loc.load(Ordering::Relaxed);
+        let data = meta.stringify();
+        pax::write_raw_entry(&mut self.w, pax::MetaType::PaxGlobal.char(), &data)?;
+
+        self.scar_index.push(IndexEntry {
+            raw_loc: loc,
+            typeflag: b'g',
+            data,
+        });
+
         Ok(())
     }
 
@@ -154,8 +170,13 @@ impl ScarWriter {
             num_digits += 1;
         }
 
-        write!(w, "{} {} {} ", num_digits + len, ent.typeflag.char() as char, ent.raw_loc)?;
-        w.write_all(ent.data.as_slice())?;
-        w.write_all(b"\n")
+        if ent.typeflag == pax::MetaType::PaxGlobal.char() {
+            write!(w, "{} {} {} ", num_digits + len, ent.typeflag as char, ent.raw_loc)?;
+            w.write_all(ent.data.as_slice())
+        } else {
+            write!(w, "{} {} {} ", num_digits + len, ent.typeflag as char, ent.raw_loc)?;
+            w.write_all(ent.data.as_slice())?;
+            w.write_all(b"\n")
+        }
     }
 }

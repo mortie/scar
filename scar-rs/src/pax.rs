@@ -158,7 +158,7 @@ impl FileType {
 }
 
 #[derive(Copy, Clone, Debug)]
-enum MetaType {
+pub enum MetaType {
     PaxNext,
     PaxGlobal,
     GnuPath,
@@ -166,7 +166,7 @@ enum MetaType {
 }
 
 impl MetaType {
-    fn char(self) -> u8 {
+    pub fn char(self) -> u8 {
         match self {
             Self::PaxNext => b'x',
             Self::PaxGlobal => b'g',
@@ -175,7 +175,7 @@ impl MetaType {
         }
     }
 
-    fn from_char(ch: u8) -> Option<Self> {
+    pub fn from_char(ch: u8) -> Option<Self> {
         match ch {
             b'x' => Some(Self::PaxNext),
             b'g' => Some(Self::PaxGlobal),
@@ -393,67 +393,63 @@ pub fn read_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> 
 }
 
 pub fn write_header<'a, W: Write>(w: &mut W, meta: &Metadata) -> io::Result<()> {
+    // We ignore all 'write_pax_*' errors here, since those functions will only fail if
+    // writing to the underlying stream fails, and that won't happen when writing to a Vec
     let mut pax_str = Vec::<u8>::new();
 
     if let Some(atime) = meta.atime {
-        write_pax_time(&mut pax_str, b"atime", atime)?;
+        let _ = write_pax_time(&mut pax_str, b"atime", atime);
     }
 
     if let Some(charset) = &meta.charset {
-        write_pax_bytes(&mut pax_str, b"charset", charset.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"charset", charset.as_slice());
     }
 
     if let Some(comment) = &meta.comment {
-        write_pax_bytes(&mut pax_str, b"comment", comment.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"comment", comment.as_slice());
     }
 
     if meta.gid > 0o7777777u64 {
-        write_pax_u64(&mut pax_str, b"gid", meta.gid)?;
+        let _ = write_pax_u64(&mut pax_str, b"gid", meta.gid);
     }
 
     if meta.gname.len() > 32 {
-        write_pax_bytes(&mut pax_str, b"gname", meta.gname.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"gname", meta.gname.as_slice());
     }
 
     if let Some(hdrcharset) = &meta.hdrcharset {
-        write_pax_bytes(&mut pax_str, b"hdrcharset", hdrcharset.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"hdrcharset", hdrcharset.as_slice());
     }
 
     if meta.linkpath.len() > 100 {
-        write_pax_bytes(&mut pax_str, b"linkpath", meta.linkpath.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"linkpath", meta.linkpath.as_slice());
     }
 
     if meta.mtime > 0o777777777777u64 as f64 || meta.mtime != meta.mtime.floor() {
-        write_pax_time(&mut pax_str, b"mtime", meta.mtime)?;
+        let _ = write_pax_time(&mut pax_str, b"mtime", meta.mtime);
     }
 
     if meta.path.len() > 100 {
-        write_pax_bytes(&mut pax_str, b"path", meta.path.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"path", meta.path.as_slice());
     }
 
     if meta.size > 0o77777777777 {
-        write_pax_u64(&mut pax_str, b"size", meta.size)?;
+        let _ = write_pax_u64(&mut pax_str, b"size", meta.size);
     }
 
     if meta.uid > 0o7777777 {
-        write_pax_u64(&mut pax_str, b"uid", meta.uid)?;
+        let _ = write_pax_u64(&mut pax_str, b"uid", meta.uid);
     }
 
     if meta.uname.len() > 32 {
-        write_pax_bytes(&mut pax_str, b"uname", meta.uname.as_slice())?;
+        let _ = write_pax_bytes(&mut pax_str, b"uname", meta.uname.as_slice());
     }
-
-    let mut block: Block;
 
     if !pax_str.is_empty() {
-        block = [0; size_of::<Block>()];
-        block[UST_TYPEFLAG.start] = MetaType::PaxNext.char();
-        block_write_octal(&mut block, UST_SIZE, pax_str.len() as u64);
-        write_header_block(w, &mut block)?;
-        write_content(w, &mut pax_str.as_slice(), pax_str.len() as u64)?;
+        write_raw_entry(w, MetaType::PaxNext.char(), &pax_str)?;
     }
 
-    block = [0; size_of::<Block>()];
+    let mut block = new_block();
     block_write_str(&mut block, UST_NAME, meta.path.as_slice());
     block_write_octal(&mut block, UST_MODE, meta.mode as u64);
     block_write_octal(&mut block, UST_UID, meta.uid);
@@ -476,20 +472,28 @@ pub fn write_file<W: Write, R: Read>(w: &mut W, r: &mut R, meta: &Metadata) -> i
     write_content(w, r, meta.size)
 }
 
+pub fn write_raw_entry<W: Write>(w: &mut W, typeflag: u8, content: &Vec<u8>) -> io::Result<()> {
+    let mut block = new_block();
+    block[UST_TYPEFLAG.start] = typeflag;
+    block_write_octal(&mut block, UST_SIZE, content.len() as u64);
+    write_header_block(w, &mut block)?;
+    write_content(w, &mut content.as_slice(), content.len() as u64)
+}
+
 #[derive(Debug)]
 pub struct PaxMeta {
-    atime: Option<f64>,
-    charset: Option<Vec<u8>>,
-    comment: Option<Vec<u8>>,
-    gid: Option<u64>,
-    gname: Option<Vec<u8>>,
-    hdrcharset: Option<Vec<u8>>,
-    linkpath: Option<Vec<u8>>,
-    mtime: Option<f64>,
-    path: Option<Vec<u8>>,
-    size: Option<u64>,
-    uid: Option<u64>,
-    uname: Option<Vec<u8>>,
+    pub atime: Option<f64>,
+    pub charset: Option<Vec<u8>>,
+    pub comment: Option<Vec<u8>>,
+    pub gid: Option<u64>,
+    pub gname: Option<Vec<u8>>,
+    pub hdrcharset: Option<Vec<u8>>,
+    pub linkpath: Option<Vec<u8>>,
+    pub mtime: Option<f64>,
+    pub path: Option<Vec<u8>>,
+    pub size: Option<u64>,
+    pub uid: Option<u64>,
+    pub uname: Option<Vec<u8>>,
 }
 
 impl PaxMeta {
@@ -596,6 +600,62 @@ impl PaxMeta {
                 );
             }
         }
+    }
+
+    pub fn stringify(&self) -> Vec<u8> {
+        // We ignore all 'write_pax_*' errors here, since those functions will only fail if
+        // writing to the underlying stream fails, and that won't happen when writing to a Vec
+        let mut s = Vec::<u8>::new();
+
+        if let Some(atime) = self.atime {
+            let _ = write_pax_time(&mut s, b"atime", atime);
+        }
+
+        if let Some(charset) = &self.charset {
+            let _ = write_pax_bytes(&mut s, b"charset", charset.as_slice());
+        }
+
+        if let Some(comment) = &self.comment {
+            let _ = write_pax_bytes(&mut s, b"comment", comment.as_slice());
+        }
+
+        if let Some(gid) = self.gid {
+            let _ = write_pax_u64(&mut s, b"gid", gid);
+        }
+
+        if let Some(gname) = &self.gname {
+            let _ = write_pax_bytes(&mut s, b"gname", gname.as_slice());
+        }
+
+        if let Some(hdrcharset) = &self.hdrcharset {
+            let _ = write_pax_bytes(&mut s, b"hdrcharset", hdrcharset.as_slice());
+        }
+
+        if let Some(linkpath) = &self.linkpath {
+            let _ = write_pax_bytes(&mut s, b"linkpath", linkpath.as_slice());
+        }
+
+        if let Some(mtime) = self.mtime {
+            let _ = write_pax_time(&mut s, b"mtime", mtime);
+        }
+
+        if let Some(path) = &self.path {
+            let _ = write_pax_bytes(&mut s, b"path", path.as_slice());
+        }
+
+        if let Some(size) = self.size {
+            let _ = write_pax_u64(&mut s, b"size", size);
+        }
+
+        if let Some(uid) = self.uid {
+            let _ = write_pax_u64(&mut s, b"uid", uid);
+        }
+
+        if let Some(uname) = &self.uname {
+            let _ = write_pax_bytes(&mut s, b"uname", uname.as_slice());
+        }
+
+        s
     }
 }
 

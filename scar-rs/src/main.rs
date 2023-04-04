@@ -11,6 +11,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         Box::new(io::stdout()),
     );
 
+    let mut pm = pax::PaxMeta::new();
+    pm.charset = Some(b"HELO WORLD".to_vec());
+    pm.hdrcharset = Some(b"NOPE".to_vec());
+    writer.add_global_meta(&pm)?;
+
     while let Some(meta) = reader.next_header()? {
         writer.add_entry(&meta)?;
 
