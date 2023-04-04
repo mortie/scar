@@ -37,55 +37,46 @@ before a header block.
 The SCAR-INDEX section starts with the text `SCAR-INDEX`, followed by a line feed character,
 followed by 0 or more index entries.
 
-An index entry starts with the length of the index entry as a base 10 number, followed by a space
-(`"%d ", <entry length>`), followed by some number of records in the same format as the
-pax extended header records as specified in POSIX.1-2017.
+An index entry starts with the length of the index entry as a base 10 number, followed by a space,
+followed by a type flag (`0` for file, `1` for hard link, `5` for directory, etc; same as in the
+UStar header), followed by a space, followed by the entry's offset into the (uncompressed) tar body,
+followed by a path, followed by a newline
+(`"%d %c %d %s\n", <entry length>, <typeflag>, <offset>, <path>`).
 
-A pax extended header record is the length of the record as a base 10 number, followed by a space,
-followed by a keyword, followed by a '=' character, followed by a value, followed by a
-line feed chracter (`"%d %s=%s\n", <length>, <keyword>, <value>`).
+The typeflag `g` is also allowed. When `g` is used, the entry doesn't end with a path and a newline,
+but instead in pax extended header records as specified in POSIX.1-2017
+(`"%d g %d %s", <entry length>, <offset>, <pax extended header records>`).
+The meaning of a `g` index entry is similar to the meaning of a `g` file entry in the main tar body
+in that it affects all following entries.
+The `g` entry type is intended to make it possible to turn a pax/tar archive into a tar archive
+without changing anything about the tar body.
+
+The other metadata entry types (pax's `x`, GNU's `L` and `K`) are not legal as typeflags
+in index entries.
 
 **Note:** The length of an index entry includes the length itself.
-An empty index entry would look like `"2 "`, since it consists of two octets: the '2' and the space.
-The length of a pax extended header record also includes the length itself.
-A header entry with `path=foo` would look like `"12 path=foo\n"`, since it consists of 12 octets:
-3 octets for the `12` and space, 8 octets for the `path=foo`, and 1 octet for the line feed.
 
-The standard set of record types is those which are specified in the POSIX.1-2017,
-plus `scar:offset` and `scar:path`.
-The `scar:offset` record specifies at which offset into the (uncompressed) tar body the file can be found.
-The rest of the record types are as specified in POSIX.1-2017.
-The `scar:offset` and the `scar:path` records are mandatory, the rest are optional.
-The implementation _must_ ignore records it doesn't recognize.
+The implementation _must_ create `g` entries to correspond to the `g` file entries in the tar body,
+such that all of a file's metadata can be found without scanning through the tar body.
 
 The implementation _must_ create a seek point before the start of the SCAR-INDEX section.
 
-Here's an example of a SCAR-INDEX section with 2 files:
+If a file is preceded by metadata entries other than `g` (such as pax's `x`, GNU's `L` and `K`),
+the file's index entry's offset _must_ point to the start of the earliest applicable metadata entry.
+
+Here's an example of a SCAR-INDEX section:
 
 ```
 SCAR-INDEX
-37 14 offset=512
-20 path=./README.md
-36 18 path=./scar.go
-15 offset=2560
+20 5 512 ./somedir/
+30 0 1024 ./somedir/hello.txt
+83 g 2048 35 charset=ISO-IR 10646 2000 UTF-8
+38 hdrcharset=ISO-IR 10646 2000 UTF-8
+32 0 3072 ./somedir/goodbye.txt
 ```
 
-When extracting a file using the table, the implementation must seek to a continue point which represents
-some point before or at the given **offset**, then read the tar body sequentially
-as if all the index entry's records were present in an earlier global extended header record (type `g`),
-until it finds a header block which doesn't represent metadata (meaning anything from `0` through `7`
-or the binary `\0`).
-
-The implementation must create the index entry such that extracting the file using the above algorithm
-produces the same results as extracting the file using a normal linear pass through the tar body.
-
-**Note:** That means, the implementation might find a given piece of metadata through
-an earlier `g` or `x` record, an earlier non-standard metadata record (such as the GNU
-`K` and `L` records), the record in the index entry, or the header block.
-
-**Note:** An implementation should usually set the `offset` field to point to an earlier
-metadata header (`g` or `x`) to reduce duplication.
-However, it is also legal to write out all of the file's metadata as part of the file's index entry.
+This index shows a directory `./somedir/`, a file `./somedir/hello.txt`, a `g` entry which
+sets the `charset` and `hdrcharset` of all subsequent entries, then a file `./somedir/goodbye.txt`.
 
 ### The SCAR-CHUNKS section
 
