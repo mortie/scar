@@ -2,7 +2,7 @@ use scar::compression;
 use scar::pax::{self, PaxReader};
 use scar::write::ScarWriter;
 use std::error::Error;
-use std::io::{self, Read, Write};
+use std::io;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut reader = PaxReader::new(io::stdin());
@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut block = pax::new_block();
             let mut size = meta.size as i64;
             while size > 0 {
-                reader.r.read_exact(&mut block)?;
-                writer.w.write_all(&mut block)?;
+                reader.read_block(&mut block)?;
+                writer.write_block(&block)?;
                 size -= block.len() as i64;
             }
         }

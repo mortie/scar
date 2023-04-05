@@ -1,25 +1,25 @@
 use super::{Compressor, CompressorFactory, Decompressor, DecompressorFactory};
 use flate2;
 use std::error::Error;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 
 struct GzipCompressor {
-    w: Option<flate2::write::GzEncoder<Box<dyn Write>>>,
+    w: flate2::write::GzEncoder<Box<dyn Write>>,
 }
 
 impl Write for GzipCompressor {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.w.as_mut().unwrap().write(buf)
+        self.w.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.w.as_mut().unwrap().flush()
+        self.w.flush()
     }
 }
 
 impl Compressor for GzipCompressor {
-    fn finish(&mut self) -> io::Result<Box<dyn Write>> {
-        self.w.take().unwrap().finish()
+    fn finish(self: Box<Self>) -> io::Result<Box<dyn Write>> {
+        self.w.finish()
     }
 }
 
@@ -38,7 +38,39 @@ impl GzipCompressorFactory {
 impl CompressorFactory for GzipCompressorFactory {
     fn create_compressor(&self, w: Box<dyn Write>) -> Box<dyn Compressor> {
         Box::new(GzipCompressor {
-            w: Some(flate2::write::GzEncoder::new(w, self.level)),
+            w: flate2::write::GzEncoder::new(w, self.level),
+        })
+    }
+}
+
+struct GzipDecompressor {
+    r: flate2::read::GzDecoder<Box<dyn Read>>,
+}
+
+impl Read for GzipDecompressor {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.r.read(buf)
+    }
+}
+
+impl Decompressor for GzipDecompressor {
+    fn finish(self: Box<Self>) -> io::Result<Box<dyn Read>> {
+        Ok(self.r.into_inner())
+    }
+}
+
+pub struct GzipDecompressorFactory {}
+
+impl GzipDecompressorFactory {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl DecompressorFactory for GzipDecompressorFactory {
+    fn create_decompressor(&self, r: Box<dyn Read>) -> Box<dyn Decompressor> {
+        Box::new(GzipDecompressor {
+            r: flate2::read::GzDecoder::new(r),
         })
     }
 }

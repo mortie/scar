@@ -1,10 +1,10 @@
+use crate::util;
 use std::cmp::min;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Octal;
 use std::io::{self, BufReader, Read, Write};
 use std::mem::size_of;
-use crate::util;
 
 #[derive(Copy, Clone)]
 pub struct UStarHdrField {
@@ -660,7 +660,7 @@ impl PaxMeta {
 }
 
 pub struct PaxReader<R: Read> {
-    pub r: R,
+    r: R,
     global_meta: PaxMeta,
 }
 
@@ -804,5 +804,9 @@ impl<R: Read> PaxReader<R> {
 
     pub fn read_content<W: Write>(&mut self, w: &mut W, size: u64) -> io::Result<()> {
         read_content(w, &mut self.r, size)
+    }
+
+    pub fn read_block(&mut self, block: &mut Block) -> io::Result<()> {
+        self.r.read_exact(block)
     }
 }
