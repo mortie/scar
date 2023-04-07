@@ -1,3 +1,4 @@
+use std::io::{self, BufRead};
 use std::ops::{AddAssign, DivAssign};
 
 pub fn log10_ceil<T: AddAssign + DivAssign + PartialOrd + From<u8>>(mut num: T) -> T {
@@ -12,6 +13,52 @@ pub fn log10_ceil<T: AddAssign + DivAssign + PartialOrd + From<u8>>(mut num: T) 
     }
 
     log
+}
+
+pub fn find_last_occurrence(heystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if heystack.len() < needle.len() {
+        return None;
+    }
+
+    let mut idx = heystack.len() - needle.len();
+
+    loop {
+        if &heystack[idx..(idx + needle.len())] == needle {
+            return Some(idx);
+        }
+
+        if idx == 0 {
+            return None;
+        }
+
+        idx -= 1;
+    }
+}
+
+pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(usize, usize)> {
+    let mut num = 0usize;
+    let mut num_len = 0usize;
+    loop {
+        let buf = br.fill_buf()?;
+        if buf.len() == 0 {
+            return Ok((num, num_len));
+        }
+
+        let mut count = 0;
+        for ch in buf {
+            if *ch >= b'0' && *ch <= b'9' {
+                count += 1;
+                num *= 10;
+                num += (*ch - b'0') as usize;
+                num_len += 1;
+            } else {
+                br.consume(count);
+                return Ok((num, num_len));
+            }
+        }
+
+        br.consume(count);
+    }
 }
 
 #[test]

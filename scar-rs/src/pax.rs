@@ -157,7 +157,7 @@ impl FileType {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum MetaType {
     PaxNext,
     PaxGlobal,
@@ -657,6 +657,8 @@ impl PaxMeta {
 
         s
     }
+
+    pub fn merge(&mut self, other: PaxMeta) {}
 }
 
 pub struct PaxReader<R: Read> {

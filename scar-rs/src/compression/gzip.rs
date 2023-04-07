@@ -18,7 +18,8 @@ impl Write for GzipCompressor {
 }
 
 impl Compressor for GzipCompressor {
-    fn finish(self: Box<Self>) -> io::Result<Box<dyn Write>> {
+    fn finish(mut self: Box<Self>) -> io::Result<Box<dyn Write>> {
+        self.w.try_finish()?;
         self.w.finish()
     }
 }
@@ -54,8 +55,8 @@ impl Read for GzipDecompressor {
 }
 
 impl Decompressor for GzipDecompressor {
-    fn finish(self: Box<Self>) -> io::Result<Box<dyn Read>> {
-        Ok(self.r.into_inner())
+    fn finish(self: Box<Self>) -> Box<dyn Read> {
+        self.r.into_inner()
     }
 }
 
@@ -72,5 +73,9 @@ impl DecompressorFactory for GzipDecompressorFactory {
         Box::new(GzipDecompressor {
             r: flate2::read::GzDecoder::new(r),
         })
+    }
+
+    fn magic(&self) -> &'static [u8] {
+        b"\x1f\x8b"
     }
 }

@@ -136,14 +136,20 @@ impl ScarWriter {
         let chunks_checkpoint = self.continue_points.last().unwrap().clone();
         self.w.as_mut().unwrap().write_all(b"SCAR-CHUNKS\n")?;
         for entry in &self.continue_points {
-            write!(self.w.as_mut().unwrap(), "{} {}\n", entry.compressed_loc, entry.raw_loc)?;
+            write!(
+                self.w.as_mut().unwrap(),
+                "{} {}\n",
+                entry.compressed_loc,
+                entry.raw_loc
+            )?;
         }
 
         self.checkpoint()?;
         write!(
             self.w.as_mut().unwrap(),
             "SCAR-TAIL\n{}\n{}\n",
-            index_checkpoint.compressed_loc, chunks_checkpoint.compressed_loc
+            index_checkpoint.compressed_loc,
+            chunks_checkpoint.compressed_loc
         )?;
 
         self.w.take().unwrap().take().finish()
@@ -164,7 +170,9 @@ impl ScarWriter {
     }
 
     fn checkpoint(&mut self) -> io::Result<()> {
-        let w = self.w.take().unwrap().take();
+        let mut w = self.w.take().unwrap().take();
+        w.flush()?;
+        let w = w.finish()?;
 
         let compressed_loc = self.compressed_loc.load(Ordering::Relaxed);
         self.last_checkpoint_compressed_loc = compressed_loc;
@@ -174,7 +182,7 @@ impl ScarWriter {
         });
 
         self.w = Some(TrackedWrite {
-            w: self.compressor_factory.create_compressor(w.finish()?),
+            w: self.compressor_factory.create_compressor(w),
             written: self.raw_loc.clone(),
         });
 
