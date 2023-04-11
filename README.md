@@ -144,17 +144,3 @@ The standard compression formats are:
 * **bzip2**: magic bytes: `42 5a 68`
 * **xz**: magic bytes: `fd 37 7a 58 00`
 * **zstd**: magic bytes: `28 b5 2f fd`
-
-### Finding the SCAR-TAIL
-
-Because of the desire to be compatible with the existing tar ecosystem, even the footer is compressed.
-This makes it a bit hard to find the SCAR-TAIL section.
-However, this algorithm can be used:
-
-1. Read the last 512 bytes of the file.
-2. Find the last occurrence of any magic bytes sequence.
-3. Try to start decompressing from that point, using the compression algorithm which corresponds to the
-   magic bytes.
-4. If the decompressed data starts with `"SCAR-TAIL\n"`, you have found the SCAR-TAIL section.
-   If not, try again with an earlier occurrence of a magic bytes sequence.
-5. Repeat until you have found `"SCAR-TAIL\n"`.

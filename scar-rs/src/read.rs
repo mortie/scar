@@ -1,4 +1,4 @@
-use crate::compression::{Decompressor, DecompressorFactory};
+use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
 use crate::util::{find_last_occurrence, read_num_from_bufread};
 use std::cell::RefCell;
@@ -43,11 +43,25 @@ pub struct ScarReader {
 }
 
 impl ScarReader {
-    pub fn new(
-        r: Box<dyn ReadSeek>,
+    pub fn new(r: Box<dyn ReadSeek>) -> Result<Self, Box<dyn Error>> {
+        Self::try_new(Rc::new(RefCell::new(r)))
+    }
+
+    pub fn try_new(rc: Rc<RefCell<Box<dyn ReadSeek>>>) -> Result<Self, Box<dyn Error>> {
+        let df = Box::new(compression::GzipDecompressorFactory::new());
+        match Self::try_decompressor(rc.clone(), df) {
+            Ok(res) => return Ok(res),
+            Err(_) => (),
+        };
+
+        let df = Box::new(compression::PlainDecompressorFactory::new());
+        Self::try_decompressor(rc, df)
+    }
+
+    pub fn try_decompressor(
+        rc: Rc<RefCell<Box<dyn ReadSeek>>>,
         df: Box<dyn DecompressorFactory>,
     ) -> Result<Self, Box<dyn Error>> {
-        let rc = Rc::new(RefCell::new(r));
         let mut r = RSCell::new(rc.clone());
 
         r.seek(io::SeekFrom::End(-512))?;

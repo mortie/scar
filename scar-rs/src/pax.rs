@@ -480,7 +480,7 @@ pub fn write_raw_entry<W: Write>(w: &mut W, typeflag: u8, content: &Vec<u8>) -> 
     write_content(w, &mut content.as_slice(), content.len() as u64)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PaxMeta {
     pub atime: Option<f64>,
     pub charset: Option<Vec<u8>>,

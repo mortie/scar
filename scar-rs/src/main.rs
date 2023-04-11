@@ -33,8 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     {
         let f = Box::new(fs::File::open("tmp.scar")?);
-        let df = Box::new(compression::GzipDecompressorFactory::new());
-        let mut reader = ScarReader::new(f, df)?;
+        let mut reader = ScarReader::new(f)?;
 
         for item in reader.index()? {
             println!("{}", item?);
