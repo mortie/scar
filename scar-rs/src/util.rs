@@ -1,5 +1,11 @@
-use std::io::{self, BufRead};
+use std::io::{self, Read, BufRead};
 use std::ops::{AddAssign, DivAssign};
+
+#[derive(Debug, Clone)]
+pub struct ContinuePoint {
+    pub compressed_loc: u64,
+    pub raw_loc: u64,
+}
 
 pub fn log10_ceil<T: AddAssign + DivAssign + PartialOrd + From<u8>>(mut num: T) -> T {
     if num == 0.into() {
@@ -35,8 +41,8 @@ pub fn find_last_occurrence(heystack: &[u8], needle: &[u8]) -> Option<usize> {
     }
 }
 
-pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(usize, usize)> {
-    let mut num = 0usize;
+pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(u64, usize)> {
+    let mut num = 0u64;
     let mut num_len = 0usize;
     loop {
         let buf = br.fill_buf()?;
@@ -49,7 +55,7 @@ pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(usize, usi
             if *ch >= b'0' && *ch <= b'9' {
                 count += 1;
                 num *= 10;
-                num += (*ch - b'0') as usize;
+                num += (*ch - b'0') as u64;
                 num_len += 1;
             } else {
                 br.consume(count);
@@ -59,6 +65,11 @@ pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(usize, usi
 
         br.consume(count);
     }
+}
+
+struct PeekReader<R: Read> {
+    r: R,
+    buf: [u8; 4 * 1024],
 }
 
 #[test]

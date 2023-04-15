@@ -1,15 +1,9 @@
 use crate::compression::{Compressor, CompressorFactory};
 use crate::pax;
-use crate::util;
+use crate::util::{log10_ceil, ContinuePoint};
 use std::io::{self, Read, Write};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
-
-#[derive(Debug, Clone)]
-pub struct ContinuePoint {
-    pub compressed_loc: u64,
-    pub raw_loc: u64,
-}
 
 pub struct TrackedWrite<W: Write> {
     pub w: W,
@@ -190,9 +184,9 @@ impl ScarWriter {
     }
 
     fn write_entry(w: &mut TrackedWrite<Box<dyn Compressor>>, ent: &IndexEntry) -> io::Result<()> {
-        let len: u64 = 3 + util::log10_ceil(ent.raw_loc) + 1 + ent.data.len() as u64 + 1;
-        let mut num_digits = util::log10_ceil(len);
-        if util::log10_ceil(len + num_digits) > num_digits {
+        let len: u64 = 3 + log10_ceil(ent.raw_loc) + 1 + ent.data.len() as u64 + 1;
+        let mut num_digits = log10_ceil(len);
+        if log10_ceil(len + num_digits) > num_digits {
             num_digits += 1;
         }
 

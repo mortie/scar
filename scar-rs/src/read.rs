@@ -1,6 +1,6 @@
 use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
-use crate::util::{find_last_occurrence, read_num_from_bufread};
+use crate::util::{find_last_occurrence, read_num_from_bufread, ContinuePoint};
 use std::cell::RefCell;
 use std::cmp::min;
 use std::error::Error;
@@ -39,7 +39,7 @@ pub struct ScarReader {
     r: RSCell,
     df: Box<dyn DecompressorFactory>,
     compressed_index_loc: u64,
-    compressed_chunks_loc: u64,
+    chunks: Vec<ContinuePoint>,
 }
 
 impl ScarReader {
@@ -51,7 +51,7 @@ impl ScarReader {
         let df = Box::new(compression::GzipDecompressorFactory::new());
         match Self::try_decompressor(rc.clone(), df) {
             Ok(res) => return Ok(res),
-            Err(_) => (),
+            Err(err) => println!("oh no {}", err),
         };
 
         let df = Box::new(compression::PlainDecompressorFactory::new());
@@ -104,13 +104,56 @@ impl ScarReader {
             let compressed_chunks_loc =
                 String::from_utf8_lossy(&line[..line.len() - 1]).parse::<u64>()?;
 
+            let chunks = Self::read_chunks(rc, compressed_chunks_loc, &df)?;
+
             return Ok(Self {
                 r,
                 df,
                 compressed_index_loc,
-                compressed_chunks_loc,
+                chunks,
             });
         }
+    }
+
+    fn read_chunks(
+        rc: Rc<RefCell<Box<dyn ReadSeek>>>,
+        compressed_chunks_loc: u64,
+        df: &Box<dyn DecompressorFactory>,
+    ) -> Result<Vec<ContinuePoint>, Box<dyn Error>> {
+        rc.borrow_mut().seek(io::SeekFrom::Start(compressed_chunks_loc))?;
+        let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())));
+        let mut br = io::BufReader::new(dc);
+        let mut chs = [0u8; 1];
+        let mut chunks = Vec::<ContinuePoint>::new();
+
+        let mut line = Vec::<u8>::new();
+        br.read_until(b'\n', &mut line)?;
+        if line != b"SCAR-CHUNKS\n" {
+            return Err("Invalid chunk header\n".into());
+        }
+
+        while br.fill_buf()?.len() > 0 {
+            let (compressed_loc, _) = read_num_from_bufread(&mut br)?;
+
+            br.read_exact(&mut chs)?;
+            if chs[0] != b' ' {
+                return Err("Invalid chunk".into());
+            }
+
+            let (raw_loc, _) = read_num_from_bufread(&mut br)?;
+
+            br.read_exact(&mut chs)?;
+            if chs[0] != b'\n' {
+                return Err("Invalid chunk".into());
+            }
+
+            chunks.push(ContinuePoint {
+                compressed_loc,
+                raw_loc,
+            });
+        }
+
+        Ok(chunks)
     }
 
     pub fn index(&mut self) -> Result<IndexIter, Box<dyn Error>> {
@@ -118,11 +161,11 @@ impl ScarReader {
             .seek(io::SeekFrom::Start(self.compressed_index_loc))?;
 
         let mut r = BufReader::new(self.df.create_decompressor(Box::new(self.r.clone())));
+
         let mut line = Vec::<u8>::new();
         r.read_until(b'\n', &mut line)?;
-
         if line.as_slice() != b"SCAR-INDEX\n" {
-            return Err("Invalid index".into());
+            return Err("Invalid index header".into());
         }
 
         Ok(IndexIter {
@@ -133,8 +176,10 @@ impl ScarReader {
 }
 
 pub struct IndexItem {
-    path: Vec<u8>,
-    typeflag: pax::FileType,
+    pub path: Vec<u8>,
+    pub typeflag: pax::FileType,
+    pub offset: u64,
+    pub global_meta: pax::PaxMeta,
 }
 
 impl fmt::Display for IndexItem {
@@ -157,24 +202,19 @@ impl Iterator for IndexIter {
     type Item = Result<IndexItem, Box<dyn Error>>;
 
     fn next(&mut self) -> Option<Result<IndexItem, Box<dyn Error>>> {
-        const EOF_MARKER: &[u8] = b"SCAR-TAIL\n";
-        let maybe_eof = match self.r.fill_buf() {
-            Ok(buf) => buf,
-            Err(err) => return Some(Err(Box::new(err))),
+        let b = match self.r.fill_buf() {
+            Err(err) => return Some(Err(err.into())),
+            Ok(b) => b,
         };
 
-        if maybe_eof.len() == 0 {
-            return None;
-        }
-
-        if maybe_eof.len() >= EOF_MARKER.len() && &maybe_eof[..EOF_MARKER.len()] == EOF_MARKER {
+        if b.len() == 0 {
             return None;
         }
 
         let mut chs = [0u8; 1];
 
         let (field_length, field_num_digits) = match read_num_from_bufread(&mut self.r) {
-            Ok(res) => res,
+            Ok(res) => (res.0 as usize, res.1),
             Err(err) => return Some(Err(Box::new(err))),
         };
 
@@ -241,6 +281,8 @@ impl Iterator for IndexIter {
         Some(Ok(IndexItem {
             path: content,
             typeflag: pax::FileType::from_char(typeflag),
+            offset,
+            global_meta: self.global_meta.clone(),
         }))
     }
 }
