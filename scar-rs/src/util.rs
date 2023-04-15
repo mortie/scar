@@ -2,7 +2,7 @@ use std::io::{self, BufRead};
 use std::ops::{AddAssign, DivAssign};
 
 #[derive(Debug, Clone)]
-pub struct ContinuePoint {
+pub struct Checkpoint {
     pub compressed_loc: u64,
     pub raw_loc: u64,
 }

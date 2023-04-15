@@ -1,6 +1,6 @@
 use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
-use crate::util::{find_last_occurrence, read_num_from_bufread, ContinuePoint};
+use crate::util::{find_last_occurrence, read_num_from_bufread, Checkpoint};
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
@@ -38,7 +38,7 @@ pub struct ScarReader {
     r: RSCell,
     df: Box<dyn DecompressorFactory>,
     compressed_index_loc: u64,
-    chunks: Vec<ContinuePoint>,
+    checkpoints: Vec<Checkpoint>,
 }
 
 impl ScarReader {
@@ -103,28 +103,28 @@ impl ScarReader {
             let compressed_chunks_loc =
                 String::from_utf8_lossy(&line[..line.len() - 1]).parse::<u64>()?;
 
-            let chunks = Self::read_chunks(rc, compressed_chunks_loc, &df)?;
+            let checkpoints = Self::read_checkpoints(rc, compressed_chunks_loc, &df)?;
 
             return Ok(Self {
                 r,
                 df,
                 compressed_index_loc,
-                chunks,
+                checkpoints,
             });
         }
     }
 
-    fn read_chunks(
+    fn read_checkpoints(
         rc: Rc<RefCell<Box<dyn ReadSeek>>>,
         compressed_chunks_loc: u64,
         df: &Box<dyn DecompressorFactory>,
-    ) -> Result<Vec<ContinuePoint>, Box<dyn Error>> {
+    ) -> Result<Vec<Checkpoint>, Box<dyn Error>> {
         rc.borrow_mut()
             .seek(io::SeekFrom::Start(compressed_chunks_loc))?;
         let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())));
         let mut br = io::BufReader::new(dc);
         let mut chs = [0u8; 1];
-        let mut chunks = Vec::<ContinuePoint>::new();
+        let mut chunks = Vec::<Checkpoint>::new();
 
         let mut line = Vec::<u8>::new();
         br.read_until(b'\n', &mut line)?;
@@ -147,7 +147,7 @@ impl ScarReader {
                 return Err("Invalid chunk".into());
             }
 
-            chunks.push(ContinuePoint {
+            chunks.push(Checkpoint {
                 compressed_loc,
                 raw_loc,
             });
@@ -189,23 +189,23 @@ impl ScarReader {
     }
 
     fn seek_to_raw_loc(&mut self, raw_loc: u64) -> io::Result<Box<dyn Decompressor>> {
-        let mut chunk = ContinuePoint {
+        let mut checkpoint = Checkpoint {
             compressed_loc: 0,
             raw_loc: 0,
         };
 
-        for ch in &self.chunks {
+        for ch in &self.checkpoints {
             if ch.raw_loc <= raw_loc {
-                chunk = ch.clone();
+                checkpoint = ch.clone();
             } else {
                 break;
             }
         }
 
-        self.r.seek(io::SeekFrom::Start(chunk.compressed_loc))?;
+        self.r.seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
         let mut dc = self.df.create_decompressor(Box::new(self.r.clone()));
 
-        let mut diff = raw_loc - chunk.raw_loc;
+        let mut diff = raw_loc - checkpoint.raw_loc;
         let mut buf = [0u8; 1024];
 
         while diff >= 1024 {

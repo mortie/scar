@@ -1,6 +1,6 @@
 use crate::compression::{Compressor, CompressorFactory};
 use crate::pax;
-use crate::util::{log10_ceil, ContinuePoint};
+use crate::util::{log10_ceil, Checkpoint};
 use std::io::{self, Read, Write};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -44,7 +44,7 @@ pub struct ScarWriter {
     compressed_loc: Rc<AtomicU64>,
     raw_loc: Rc<AtomicU64>,
 
-    continue_points: Vec<ContinuePoint>,
+    checkpoints: Vec<Checkpoint>,
     scar_index: Vec<IndexEntry>,
     checkpoint_interval: u64,
     last_checkpoint_compressed_loc: u64,
@@ -64,7 +64,7 @@ impl ScarWriter {
             compressed_loc,
             raw_loc,
 
-            continue_points: Vec::new(),
+            checkpoints: Vec::new(),
             scar_index: Vec::new(),
             checkpoint_interval: 1024 * 1024,
             last_checkpoint_compressed_loc: 0,
@@ -118,16 +118,16 @@ impl ScarWriter {
         self.w.as_mut().unwrap().write_all(&block)?;
 
         self.checkpoint()?;
-        let index_checkpoint = self.continue_points.last().unwrap().clone();
+        let index_checkpoint = self.checkpoints.last().unwrap().clone();
         self.w.as_mut().unwrap().write_all(b"SCAR-INDEX\n")?;
         for entry in &self.scar_index {
             Self::write_entry(self.w.as_mut().unwrap(), entry)?;
         }
 
         self.checkpoint()?;
-        let chunks_checkpoint = self.continue_points.last().unwrap().clone();
+        let chunks_checkpoint = self.checkpoints.last().unwrap().clone();
         self.w.as_mut().unwrap().write_all(b"SCAR-CHUNKS\n")?;
-        for entry in &self.continue_points {
+        for entry in &self.checkpoints {
             write!(
                 self.w.as_mut().unwrap(),
                 "{} {}\n",
@@ -168,7 +168,7 @@ impl ScarWriter {
 
         let compressed_loc = self.compressed_loc.load(Ordering::Relaxed);
         self.last_checkpoint_compressed_loc = compressed_loc;
-        self.continue_points.push(ContinuePoint {
+        self.checkpoints.push(Checkpoint {
             compressed_loc,
             raw_loc: self.raw_loc.load(Ordering::Relaxed),
         });
