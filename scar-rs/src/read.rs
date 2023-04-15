@@ -1,12 +1,11 @@
 use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
-use crate::util::{find_last_occurrence, read_num_from_bufread, ContinuePoint, Deferred};
+use crate::util::{find_last_occurrence, read_num_from_bufread, ContinuePoint};
 use std::cell::RefCell;
-use std::cmp::min;
 use std::error::Error;
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Seek};
-use std::iter::{IntoIterator, Iterator};
+use std::iter::Iterator;
 use std::rc::Rc;
 
 pub trait ReadSeek: Read + Seek {}

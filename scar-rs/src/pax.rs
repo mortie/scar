@@ -2,8 +2,7 @@ use crate::util;
 use std::cmp::min;
 use std::error::Error;
 use std::fmt;
-use std::fmt::Octal;
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, Read, Write};
 use std::mem::size_of;
 
 #[derive(Copy, Clone)]
@@ -657,8 +656,6 @@ impl PaxMeta {
 
         s
     }
-
-    pub fn merge(&mut self, other: PaxMeta) {}
 }
 
 pub struct PaxReader<R: Read> {

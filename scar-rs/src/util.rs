@@ -1,4 +1,4 @@
-use std::io::{self, BufRead, Read};
+use std::io::{self, BufRead};
 use std::ops::{AddAssign, DivAssign};
 
 #[derive(Debug, Clone)]
@@ -64,13 +64,6 @@ pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(u64, usize
         }
 
         br.consume(count);
-    }
-}
-
-pub struct Deferred<F: FnMut()>(pub F);
-impl<F: FnMut()> Drop for Deferred<F> {
-    fn drop(&mut self) {
-        (self.0)();
     }
 }
 

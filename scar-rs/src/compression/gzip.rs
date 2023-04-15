@@ -1,6 +1,5 @@
 use super::{Compressor, CompressorFactory, Decompressor, DecompressorFactory};
 use flate2;
-use std::error::Error;
 use std::io::{self, Read, Write};
 
 struct GzipCompressor {

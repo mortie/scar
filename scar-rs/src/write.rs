@@ -46,7 +46,6 @@ pub struct ScarWriter {
 
     continue_points: Vec<ContinuePoint>,
     scar_index: Vec<IndexEntry>,
-    bytes_since_checkpoint: u64,
     checkpoint_interval: u64,
     last_checkpoint_compressed_loc: u64,
 }
@@ -67,7 +66,6 @@ impl ScarWriter {
 
             continue_points: Vec::new(),
             scar_index: Vec::new(),
-            bytes_since_checkpoint: 0,
             checkpoint_interval: 1024 * 1024,
             last_checkpoint_compressed_loc: 0,
         }
