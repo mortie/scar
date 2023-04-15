@@ -1,4 +1,4 @@
-use std::io::{self, Read, BufRead};
+use std::io::{self, BufRead, Read};
 use std::ops::{AddAssign, DivAssign};
 
 #[derive(Debug, Clone)]
@@ -67,9 +67,11 @@ pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(u64, usize
     }
 }
 
-struct PeekReader<R: Read> {
-    r: R,
-    buf: [u8; 4 * 1024],
+pub struct Deferred<F: FnMut()>(pub F);
+impl<F: FnMut()> Drop for Deferred<F> {
+    fn drop(&mut self) {
+        (self.0)();
+    }
 }
 
 #[test]

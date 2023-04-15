@@ -36,7 +36,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut reader = ScarReader::new(f)?;
 
         for item in reader.index()? {
-            println!("{}", item?);
+            let item = item?;
+            println!("{}", item);
+            let mut item_reader = reader.read_item(&item)?;
+            let header = item_reader.next_header()?.unwrap();
+            println!("{}", header);
         }
     }
 

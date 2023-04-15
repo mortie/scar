@@ -663,7 +663,7 @@ impl PaxMeta {
 
 pub struct PaxReader<R: Read> {
     r: R,
-    global_meta: PaxMeta,
+    pub global_meta: PaxMeta,
 }
 
 impl<R: Read> PaxReader<R> {

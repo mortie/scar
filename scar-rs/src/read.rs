@@ -1,6 +1,6 @@
 use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
-use crate::util::{find_last_occurrence, read_num_from_bufread, ContinuePoint};
+use crate::util::{find_last_occurrence, read_num_from_bufread, ContinuePoint, Deferred};
 use std::cell::RefCell;
 use std::cmp::min;
 use std::error::Error;
@@ -120,7 +120,8 @@ impl ScarReader {
         compressed_chunks_loc: u64,
         df: &Box<dyn DecompressorFactory>,
     ) -> Result<Vec<ContinuePoint>, Box<dyn Error>> {
-        rc.borrow_mut().seek(io::SeekFrom::Start(compressed_chunks_loc))?;
+        rc.borrow_mut()
+            .seek(io::SeekFrom::Start(compressed_chunks_loc))?;
         let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())));
         let mut br = io::BufReader::new(dc);
         let mut chs = [0u8; 1];
@@ -160,18 +161,64 @@ impl ScarReader {
         self.r
             .seek(io::SeekFrom::Start(self.compressed_index_loc))?;
 
-        let mut r = BufReader::new(self.df.create_decompressor(Box::new(self.r.clone())));
+        let mut br = BufReader::new(self.df.create_decompressor(Box::new(self.r.clone())));
 
         let mut line = Vec::<u8>::new();
-        r.read_until(b'\n', &mut line)?;
+        br.read_until(b'\n', &mut line)?;
         if line.as_slice() != b"SCAR-INDEX\n" {
             return Err("Invalid index header".into());
         }
 
+        let seek_pos = self.r.seek(io::SeekFrom::Current(0))?;
+
         Ok(IndexIter {
-            r,
+            r: self.r.clone(),
+            br,
             global_meta: pax::PaxMeta::new(),
+            seek_pos, 
         })
+    }
+
+    pub fn read_item(
+        &mut self,
+        item: &IndexItem,
+    ) -> Result<pax::PaxReader<Box<dyn Decompressor>>, Box<dyn Error>> {
+        let dc = self.seek_to_raw_loc(item.offset)?;
+        let mut pr = pax::PaxReader::new(dc);
+        pr.global_meta = item.global_meta.clone();
+        Ok(pr)
+    }
+
+    fn seek_to_raw_loc(&mut self, raw_loc: u64) -> io::Result<Box<dyn Decompressor>> {
+        let mut chunk = ContinuePoint {
+            compressed_loc: 0,
+            raw_loc: 0,
+        };
+
+        for ch in &self.chunks {
+            if ch.raw_loc <= raw_loc {
+                chunk = ch.clone();
+            } else {
+                break;
+            }
+        }
+
+        self.r.seek(io::SeekFrom::Start(chunk.compressed_loc))?;
+        let mut dc = self.df.create_decompressor(Box::new(self.r.clone()));
+
+        let mut diff = raw_loc - chunk.raw_loc;
+        let mut buf = [0u8; 1024];
+
+        while diff >= 1024 {
+            dc.read(&mut buf)?;
+            diff -= 1024;
+        }
+
+        if diff > 0 {
+            dc.read(&mut buf[0..(diff as usize)])?;
+        }
+
+        Ok(dc)
     }
 }
 
@@ -194,15 +241,21 @@ impl fmt::Display for IndexItem {
 }
 
 pub struct IndexIter {
-    r: BufReader<Box<dyn Decompressor>>,
+    r: RSCell,
+    br: BufReader<Box<dyn Decompressor>>,
     global_meta: pax::PaxMeta,
+    seek_pos: u64,
 }
 
 impl Iterator for IndexIter {
     type Item = Result<IndexItem, Box<dyn Error>>;
 
     fn next(&mut self) -> Option<Result<IndexItem, Box<dyn Error>>> {
-        let b = match self.r.fill_buf() {
+        if let Err(err) = self.r.seek(io::SeekFrom::Start(self.seek_pos)) {
+            return Some(Err(err.into()));
+        }
+
+        let b = match self.br.fill_buf() {
             Err(err) => return Some(Err(err.into())),
             Ok(b) => b,
         };
@@ -213,35 +266,35 @@ impl Iterator for IndexIter {
 
         let mut chs = [0u8; 1];
 
-        let (field_length, field_num_digits) = match read_num_from_bufread(&mut self.r) {
+        let (field_length, field_num_digits) = match read_num_from_bufread(&mut self.br) {
             Ok(res) => (res.0 as usize, res.1),
             Err(err) => return Some(Err(Box::new(err))),
         };
 
-        if let Err(err) = self.r.read_exact(&mut chs) {
+        if let Err(err) = self.br.read_exact(&mut chs) {
             return Some(Err(Box::new(err)));
         } else if chs[0] != b' ' {
             return Some(Err("Invalid index entry".into()));
         }
 
-        let typeflag = if let Err(err) = self.r.read_exact(&mut chs) {
+        let typeflag = if let Err(err) = self.br.read_exact(&mut chs) {
             return Some(Err(Box::new(err)));
         } else {
             chs[0]
         };
 
-        if let Err(err) = self.r.read_exact(&mut chs) {
+        if let Err(err) = self.br.read_exact(&mut chs) {
             return Some(Err(Box::new(err)));
         } else if chs[0] != b' ' {
             return Some(Err("Invalid index entry".into()));
         }
 
-        let (offset, offset_num_digits) = match read_num_from_bufread(&mut self.r) {
+        let (offset, offset_num_digits) = match read_num_from_bufread(&mut self.br) {
             Ok(res) => res,
             Err(err) => return Some(Err(Box::new(err))),
         };
 
-        if let Err(err) = self.r.read_exact(&mut chs) {
+        if let Err(err) = self.br.read_exact(&mut chs) {
             return Some(Err(Box::new(err)));
         } else if chs[0] != b' ' {
             return Some(Err("Invalid index entry".into()));
@@ -252,7 +305,7 @@ impl Iterator for IndexIter {
                 let content_length = field_length - field_num_digits - 3 - offset_num_digits - 1;
                 let mut content = Vec::<u8>::new();
                 content.resize(content_length, 0);
-                if let Err(err) = self.r.read_exact(content.as_mut_slice()) {
+                if let Err(err) = self.br.read_exact(content.as_mut_slice()) {
                     return Some(Err(Box::new(err)));
                 }
 
@@ -268,15 +321,20 @@ impl Iterator for IndexIter {
         let content_length = field_length - field_num_digits - 3 - offset_num_digits - 2;
         let mut content = Vec::<u8>::new();
         content.resize(content_length, 0);
-        if let Err(err) = self.r.read_exact(content.as_mut_slice()) {
+        if let Err(err) = self.br.read_exact(content.as_mut_slice()) {
             return Some(Err(Box::new(err)));
         }
 
-        if let Err(err) = self.r.read_exact(&mut chs) {
+        if let Err(err) = self.br.read_exact(&mut chs) {
             return Some(Err(Box::new(err)));
         } else if chs[0] != b'\n' {
             return Some(Err("Invalid index entry".into()));
         }
+
+        self.seek_pos = match self.r.seek(io::SeekFrom::Current(0)) {
+            Ok(pos) => pos,
+            Err(err) => return Some(Err(err.into())),
+        };
 
         Some(Ok(IndexItem {
             path: content,
