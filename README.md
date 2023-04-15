@@ -16,9 +16,9 @@ It is subject to change at any time without notice and should not be relied upon
 
 Scar is implemented as an extra footer added after end of the tar archive.
 A Scar file is made up of the tar body,
-followed by the SCAR-INDEX section, the SCAR-CHUNKS section, and the SCAR-TAIL section.
+followed by the SCAR-INDEX section, the SCAR-CHECKPOINTS section, and the SCAR-TAIL section.
 All those parts are compressed using one of the supported compression algorithms.
-The compressor is restarted in strategic locations to create "seek points".
+The compressor is restarted in strategic locations to create "checkpoints".
 
 ### The tar body
 
@@ -28,8 +28,8 @@ and _may_ support compatible extensions.
 This reference implementation supports the pax format and the GNU extensions.
 The tar body includes the end of archive indicator, which is two 512-byte blocks of zeroes.
 
-The implementation _may_ create a seek point before any header block.
-The implementation _must not_ create a seek point at any location in the tar body other than right
+The implementation _may_ create a checkpoint before any header block.
+The implementation _must not_ create a checkpoint at any location in the tar body other than right
 before a header block.
 
 ### The SCAR-INDEX section
@@ -37,93 +37,86 @@ before a header block.
 The SCAR-INDEX section starts with the text `SCAR-INDEX`, followed by a line feed character,
 followed by 0 or more index entries.
 
-An index entry starts with the length of the index entry as a base 10 number, followed by a space
-(`"%d ", <entry length>`), followed by some number of records in the same format as the
-pax extended header records as specified in POSIX.1-2017.
+An index entry starts with the length of the index entry as a base 10 number, followed by a space,
+followed by a type flag (`0` for file, `1` for hard link, `5` for directory, etc; same as in the
+UStar header), followed by a space, followed by the entry's offset into the (uncompressed) tar body,
+followed by a path, followed by a newline
+(`"%d %c %d %s\n", <entry length>, <typeflag>, <offset>, <path>`).
 
-A pax extended header record is the length of the record as a base 10 number, followed by a space,
-followed by a keyword, followed by a '=' character, followed by a value, followed by a
-line feed chracter (`"%d %s=%s\n", <length>, <keyword>, <value>`).
+The typeflag `g` is also allowed. When `g` is used, the entry doesn't end with a path and a newline,
+but instead in pax extended header records as specified in POSIX.1-2017
+(`"%d g %d %s", <entry length>, <offset>, <pax extended header records>`).
+The meaning of a `g` index entry is similar to the meaning of a `g` file entry in the main tar body
+in that it affects all following entries.
+The `g` entry type is intended to make it possible to turn a pax/tar archive into a tar archive
+without changing anything about the tar body.
 
-**Note:** The length of an index entry includes the length itself.
-An empty index entry would look like `"2 "`, since it consists of two octets: the '2' and the space.
-The length of a pax extended header record also includes the length itself.
-A header entry with `path=foo` would look like `"12 path=foo\n"`, since it consists of 12 octets:
-3 octets for the `12` and space, 8 octets for the `path=foo`, and 1 octet for the line feed.
+The other metadata entry types (pax's `x`, GNU's `L` and `K`) are not legal as typeflags
+in index entries.
 
-The standard set of record types is those which are specified in the POSIX.1-2017,
-plus `scar:offset` and `scar:path`.
-The `scar:offset` record specifies at which offset into the (uncompressed) tar body the file can be found.
-The rest of the record types are as specified in POSIX.1-2017.
-The `scar:offset` and the `scar:path` records are mandatory, the rest are optional.
-The implementation _must_ ignore records it doesn't recognize.
+The implementation _must_ create `g` index entries to correspond to the non-empty `g` file objects
+in the tar body, such that all of a file's metadata can be found without scanning through the tar
+body.
 
-The implementation _must_ create a seek point before the start of the SCAR-INDEX section.
+The implementation _must not_ create entries for empty `g` file objects  (i.e file objects with no
+extended header records). This is to make sure that all index entries start on a new line.
 
-Here's an example of a SCAR-INDEX section with 2 files:
+The implementation _must_ create a checkpoint before the start of the SCAR-INDEX section.
+
+If a file is preceded by metadata entries other than `g` (such as pax's `x`, GNU's `L` and `K`),
+the file's index entry's offset _must_ point to the start of the earliest applicable metadata entry.
+
+Here's an example of a SCAR-INDEX section:
 
 ```
 SCAR-INDEX
-37 14 offset=512
-20 path=./README.md
-36 18 path=./scar.go
-15 offset=2560
+20 5 512 ./somedir/
+30 0 1024 ./somedir/hello.txt
+83 g 2048 35 charset=ISO-IR 10646 2000 UTF-8
+38 hdrcharset=ISO-IR 10646 2000 UTF-8
+32 0 3072 ./somedir/goodbye.txt
 ```
 
-When extracting a file using the table, the implementation must seek to a continue point which represents
-some point before or at the given **offset**, then read the tar body sequentially
-as if all the index entry's records were present in an earlier global extended header record (type `g`),
-until it finds a header block which doesn't represent metadata (meaning anything from `0` through `7`
-or the binary `\0`).
+This index shows a directory `./somedir/`, a file `./somedir/hello.txt`, a `g` entry which
+sets the `charset` and `hdrcharset` of all subsequent entries, then a file `./somedir/goodbye.txt`.
 
-The implementation must create the index entry such that extracting the file using the above algorithm
-produces the same results as extracting the file using a normal linear pass through the tar body.
+### The SCAR-CHECKPOINTS section
 
-**Note:** That means, the implementation might find a given piece of metadata through
-an earlier `g` or `x` record, an earlier non-standard metadata record (such as the GNU
-`K` and `L` records), the record in the index entry, or the header block.
+The SCAR-INDEX section starts with the text `SCAR-CHECKPOINTS`, followed by a line feed character,
+followed by 0 or more scar checkpoint entries.
 
-**Note:** An implementation should usually set the `offset` field to point to an earlier
-metadata header (`g` or `x`) to reduce duplication.
-However, it is also legal to write out all of the file's metadata as part of the file's index entry.
-
-### The SCAR-CHUNKS section
-
-The SCAR-INDEX section starts with the text `SCAR-CHUNKS`, followed by a line feed character,
-followed by 0 or more scar chunk entries.
-
-A scar chunk entry is an offset into the compressed data where there's a seek point
+A scar checkpoint entry is an offset into the compressed data where there's a checkpoint
 as a base 10 number, followed by a space, followed by a base 10 number which indicates
-which offset into the uncompressed tar body the seek point corresponds with,
+which offset into the uncompressed tar body the checkpoint corresponds with,
 followed by a line feed character.
 
-Here's an example of a SCAR-CHUNKS section with 3 chunks:
+Here's an example of a SCAR-CHECKPOINTS section with 3 checkpoints:
 
 ```
-SCAR-CHUNKS
+SCAR-CHECKPOINTS
 104 512
 2195 6656
 6177 23552
 ```
 
-That SCAR-CHUNKS section indicates that there's one seek point at offset 104 from the beginning of
+That SCAR-CHECKPOINTS section indicates that there's one checkpoint at offset 104 from the beginning of
 the compressed file which corresponds with offset 512 of the uncompressed file,
-one seek point at offset 2195 which corresponds with offset 6656 in the uncompressed file,
-and one seek point at offset 6177 which corresponds with offset 23552 in the uncompressed file.
+one checkpoint at offset 2195 which corresponds with offset 6656 in the uncompressed file,
+and one checkpoint at offset 6177 which corresponds with offset 23552 in the uncompressed file.
 
-The implementation _must_ create a seek point right before the start of the SCAR-CHUNKS section.
+The implementation _must_ create a checkpoint right before the start of the SCAR-CHECKPOINTS section.
 
-The SCAR-CHUNKS section should contain all seek points, except for the one right before the SCAR-INDEX
-section, the one right before the SCAR-CHUNKS section, and the one right before
+The SCAR-CHECKPOINTS section should contain all checkpoints, except for the one right before the
+SCAR-INDEX section, the one right before the SCAR-CHECKPOINTS section, and the one right before
 the SCAR-TAIL section.
 
 ### The SCAR-TAIL section
 
 The SCAR-TAIL section starts with the text `SCAR-TAIL`, followed by a line feed character,
-followed by the offset into the compressed file where the seek point right before
+followed by the offset into the compressed file where the checkpoint right before
 the SCAR-INDEX section can be found as base 10, followed by a line feed character,
-followed by the offset into the compressed file where the seek point right before the SCAR-CHUNKS
-section can be found as base 10, followed by a newline.
+followed by the offset into the compressed file where the checkpoint right before the
+SCAR-CHECKPOINTS section can be found as base 10, followed by a newline.
 
 Here's an example of a SCAR-TAIL section:
 
@@ -134,11 +127,11 @@ SCAR-TAIL
 ```
 
 That SCAR-TAIL section indicates that the SCAR-INDEX section can be found by seeking to offset 6625
-in the compressed file, and the SCAR-CHUNKS section can be found by seeking to offset 6858
+in the compressed file, and the SCAR-CHECKPOINTS section can be found by seeking to offset 6858
 in the compressed file.
 
-The implementation _must_ create a seek point right before the start of the SCAR-TAIL section.
-The seek point starts with some magic bytes defined by the compression format;
+The implementation _must_ create a checkpoint right before the start of the SCAR-TAIL section.
+The checkpoint starts with some magic bytes defined by the compression format;
 the implementation must avoid producing those magic bytes within the compressed
 data for the SCAR-TAIL section.
 The compressed data for the SCAR-TAIL section must be contained within 512 bytes.
@@ -151,17 +144,3 @@ The standard compression formats are:
 * **bzip2**: magic bytes: `42 5a 68`
 * **xz**: magic bytes: `fd 37 7a 58 00`
 * **zstd**: magic bytes: `28 b5 2f fd`
-
-### Finding the SCAR-TAIL
-
-Because of the desire to be compatible with the existing tar ecosystem, even the footer is compressed.
-This makes it a bit hard to find the SCAR-TAIL section.
-However, this algorithm can be used:
-
-1. Read the last 512 bytes of the file.
-2. Find the last occurrence of any magic bytes sequence.
-3. Try to start decompressing from that point, using the compression algorithm which corresponds to the
-   magic bytes.
-4. If the decompressed data starts with `"SCAR-TAIL\n"`, you have found the SCAR-TAIL section.
-   If not, try again with an earlier occurrence of a magic bytes sequence.
-5. Repeat until you have found `"SCAR-TAIL\n"`.
