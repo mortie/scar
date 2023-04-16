@@ -43,8 +43,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "scar-rs"
+name = "scar"
 version = "0.1.0"
 dependencies = [
  "flate2",
+]
+
+[[package]]
+name = "scar-bin"
+version = "0.1.0"
+dependencies = [
+ "scar",
 ]
