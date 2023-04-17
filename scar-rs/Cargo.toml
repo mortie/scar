@@ -1,15 +1,5 @@
-[package]
-name = "scar-rs"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "scar"
-path = "src/lib.rs"
-
-[[bin]]
-name = "scar"
-path = "src/main.rs"
-
-[dependencies]
-flate2 = "1.0"
+[workspace]
+members = [
+    "scar",
+    "scar-bin",
+]

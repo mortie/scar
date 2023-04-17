@@ -1,0 +1,13 @@
+[package]
+name = "scar-bin"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "scar"
+path = "src/main.rs"
+
+[dependencies]
+scar = { path = "../scar" }
+regex = "1.7"
+time = "0.3"

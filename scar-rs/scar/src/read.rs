@@ -42,16 +42,15 @@ pub struct ScarReader {
 }
 
 impl ScarReader {
-    pub fn new(r: Box<dyn ReadSeek>) -> Result<Self, Box<dyn Error>> {
-        Self::try_new(Rc::new(RefCell::new(r)))
+    pub fn new<R: ReadSeek + 'static>(r: R) -> Result<Self, Box<dyn Error>> {
+        Self::try_new(Rc::new(RefCell::new(Box::new(r))))
     }
 
     pub fn try_new(rc: Rc<RefCell<Box<dyn ReadSeek>>>) -> Result<Self, Box<dyn Error>> {
         let df = Box::new(compression::GzipDecompressorFactory::new());
-        match Self::try_decompressor(rc.clone(), df) {
-            Ok(res) => return Ok(res),
-            Err(err) => println!("oh no {}", err),
-        };
+        if let Ok(res) = Self::try_decompressor(rc.clone(), df) {
+            return Ok(res);
+        }
 
         let df = Box::new(compression::PlainDecompressorFactory::new());
         Self::try_decompressor(rc, df)
@@ -174,7 +173,7 @@ impl ScarReader {
             r: self.r.clone(),
             br,
             global_meta: pax::PaxMeta::new(),
-            seek_pos, 
+            seek_pos,
         })
     }
 
@@ -202,7 +201,8 @@ impl ScarReader {
             }
         }
 
-        self.r.seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
+        self.r
+            .seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
         let mut dc = self.df.create_decompressor(Box::new(self.r.clone()));
 
         let mut diff = raw_loc - checkpoint.raw_loc;
