@@ -1,3 +1,4 @@
+use regex::Regex;
 use scar::compression;
 use scar::pax::{self, PaxReader};
 use scar::read::ScarReader;
@@ -8,6 +9,10 @@ use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::process;
+use time;
+
+mod fnmatch;
+use fnmatch::glob_to_regex;
 
 fn osstr_as_bytes(s: &OsStr) -> &[u8] {
     unsafe { std::mem::transmute(s) }
@@ -42,6 +47,7 @@ enum Compression {
     Gzip(u32),
     Plain,
 }
+
 impl Compression {
     fn create_compressor_factory(&self) -> Box<dyn compression::CompressorFactory> {
         match self {
@@ -55,7 +61,154 @@ fn cmd_list(ifile: File, mut ofile: Box<dyn Write>) -> Result<(), Box<dyn Error>
     let mut reader = ScarReader::new(ifile)?;
     for entry in reader.index()? {
         let entry = entry?;
-        write!(ofile, "{}\n", String::from_utf8_lossy(entry.path.as_ref()))?;
+        write!(ofile, "{}\n", String::from_utf8_lossy(&entry.path))?;
+    }
+
+    Ok(())
+}
+
+fn cmd_cat(
+    ifile: File,
+    mut ofile: Box<dyn Write>,
+    args: &[OsString],
+) -> Result<(), Box<dyn Error>> {
+    let mut patterns = Vec::<Regex>::new();
+    patterns.reserve(args.len());
+    for arg in args {
+        patterns.push(glob_to_regex(&arg.to_string_lossy())?);
+    }
+
+    let mut reader = ScarReader::new(ifile)?;
+    for pattern in patterns {
+        for entry in reader.index()? {
+            let entry = entry?;
+            if pattern.is_match(&String::from_utf8_lossy(&entry.path)) {
+                let mut pr = reader.read_item(&entry)?;
+                let header = match pr.next_header()? {
+                    Some(h) => h,
+                    None => continue,
+                };
+
+                if header.typeflag != pax::FileType::File {
+                    continue;
+                }
+
+                pr.read_content(&mut ofile, header.size)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_stat(
+    ifile: File,
+    mut ofile: Box<dyn Write>,
+    args: &[OsString],
+) -> Result<(), Box<dyn Error>> {
+    let mut patterns = Vec::<Regex>::new();
+    patterns.reserve(args.len());
+    for arg in args {
+        patterns.push(glob_to_regex(&arg.to_string_lossy())?);
+    }
+
+    let mut reader = ScarReader::new(ifile)?;
+    let mut first = true;
+    for pattern in patterns {
+        for entry in reader.index()? {
+            let entry = entry?;
+            if pattern.is_match(&String::from_utf8_lossy(&entry.path)) {
+                let mut pr = reader.read_item(&entry)?;
+                let header = match pr.next_header()? {
+                    Some(h) => h,
+                    None => continue,
+                };
+
+                if !first {
+                    write!(ofile, "\n")?;
+                }
+                first = false;
+
+                if header.linkpath.len() > 0 {
+                    write!(
+                        ofile,
+                        "  Path: {} -> {}\n",
+                        String::from_utf8_lossy(&header.path),
+                        String::from_utf8_lossy(&header.linkpath)
+                    )
+                } else {
+                    write!(
+                        ofile,
+                        "  Path: {}\n",
+                        String::from_utf8_lossy(&header.path)
+                    )
+                }?;
+
+                write!(
+                    ofile,
+                    "  Type: {:?}\n",
+                    header.typeflag
+                )?;
+
+                write!(ofile, "  Size: {}\n", header.size)?;
+
+                if header.devmajor != 0 || header.devminor != 0 {
+                    write!(ofile, "Device: {}/{}", header.devmajor, header.devminor)?;
+                }
+
+                if let Some(atime) = header.atime {
+                    write!(
+                        ofile,
+                        " ATime: {}\n",
+                        time::OffsetDateTime::from_unix_timestamp_nanos(
+                            (atime * 1000000000f64) as i128
+                        )?
+                    )?;
+                }
+
+                write!(
+                    ofile,
+                    " MTime: {}\n",
+                    time::OffsetDateTime::from_unix_timestamp_nanos(
+                        (header.mtime * 1000000000f64) as i128
+                    )?
+                )?;
+
+                write!(
+                    ofile,
+                    "Access: {:o}  Uid: {}/{}  Gid: {}/{}\n",
+                    header.mode,
+                    header.uid,
+                    String::from_utf8_lossy(&header.uname),
+                    header.gid,
+                    String::from_utf8_lossy(&header.gname)
+                )?;
+
+                if let Some(hdrcharset) = header.hdrcharset {
+                    write!(
+                        ofile,
+                        "Hdrcharset: {}\n",
+                        String::from_utf8_lossy(&hdrcharset)
+                    )?;
+                }
+
+                if let Some(charset) = header.charset {
+                    write!(
+                        ofile,
+                        "   Charset: {}\n",
+                        String::from_utf8_lossy(&charset)
+                    )?;
+                }
+
+                if let Some(comment) = header.comment {
+                    write!(
+                        ofile,
+                        "   Comment: {}\n",
+                        String::from_utf8_lossy(&comment)
+                    )?;
+                }
+            }
+        }
     }
 
     Ok(())
@@ -145,7 +298,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         process::exit(1);
     }
 
-    match args[0].to_str() {
+    let subcmd = args[0].to_str();
+    let args = &args[1..];
+    match subcmd {
         Some("list") => {
             if args.len() > 1 {
                 return Err("'list' expects no further arguments".into());
@@ -156,9 +311,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                 _ => Err("Input must be a file ('-i')".into()),
             }
         }
-        Some("cat") => Err("'cat' is not implemented yet".into()),
+        Some("cat") => match ifile {
+            IFile::File(f) => cmd_cat(f, ofile, args),
+            _ => Err("Input must be a file ('-i')".into()),
+        },
         Some("ls") => Err("'ls' is not implemented yet".into()),
-        Some("stat") => Err("'stat' is not implemented yet".into()),
+        Some("stat") => match ifile {
+            IFile::File(f) => cmd_stat(f, ofile, args),
+            _ => Err("Input must be a file ('-i')".into()),
+        },
         Some("convert") => {
             if args.len() > 1 {
                 return Err("'convert' expects no further arguments".into());

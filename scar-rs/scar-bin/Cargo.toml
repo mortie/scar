@@ -9,4 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 scar = { path = "../scar" }
-fnmatch-regex = "0.2"
+regex = "1.7"
+time = "0.3"
