@@ -260,11 +260,16 @@ fn cmd_convert(
 }
 
 fn usage(argv0: &str) {
-    println!("Usage: {} list", argv0);
-    println!("       {} cat <paths...>", argv0);
-    println!("       {} ls <paths...>", argv0);
-    println!("       {} stat <paths...>", argv0);
-    println!("       {} convert", argv0);
+    println!("Usage:");
+    println!("  {} [options] list", argv0);
+    println!("  {} [options] cat <paths...>", argv0);
+    println!("  {} [options] ls <paths...>", argv0);
+    println!("  {} [options] stat <paths...>", argv0);
+    println!("  {} [options] convert", argv0);
+    println!("Options:");
+    println!("  -i<path>: Input file (default: stdin for 'convert')");
+    println!("  -o<path>: Output file (default: stdout)");
+    println!("  -c<format>: Compression format");
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
