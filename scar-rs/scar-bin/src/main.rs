@@ -101,6 +101,34 @@ fn cmd_cat(
     Ok(())
 }
 
+fn cmd_ls(ifile: File, mut ofile: Box<dyn Write>, args: &[OsString]) -> Result<(), Box<dyn Error>> {
+    let mut patterns = Vec::<Regex>::new();
+    patterns.reserve(args.len());
+    for arg in args {
+        let mut s = arg.to_string_lossy();
+        patterns.push(glob_to_regex(&s)?);
+        s += "/*";
+        patterns.push(glob_to_regex(&s)?);
+    }
+
+    if patterns.len() == 0 {
+        patterns.push(glob_to_regex("/*".into())?);
+    }
+
+    let mut reader = ScarReader::new(ifile)?;
+    for pattern in patterns {
+        for entry in reader.index()? {
+            let entry = entry?;
+            let s = String::from_utf8_lossy(&entry.path);
+            if pattern.is_match(&s) {
+                write!(ofile, "{}\n", s)?
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn cmd_stat(
     ifile: File,
     mut ofile: Box<dyn Write>,
@@ -137,18 +165,10 @@ fn cmd_stat(
                         String::from_utf8_lossy(&header.linkpath)
                     )
                 } else {
-                    write!(
-                        ofile,
-                        "  Path: {}\n",
-                        String::from_utf8_lossy(&header.path)
-                    )
+                    write!(ofile, "  Path: {}\n", String::from_utf8_lossy(&header.path))
                 }?;
 
-                write!(
-                    ofile,
-                    "  Type: {:?}\n",
-                    header.typeflag
-                )?;
+                write!(ofile, "  Type: {:?}\n", header.typeflag)?;
 
                 write!(ofile, "  Size: {}\n", header.size)?;
 
@@ -193,19 +213,11 @@ fn cmd_stat(
                 }
 
                 if let Some(charset) = header.charset {
-                    write!(
-                        ofile,
-                        "   Charset: {}\n",
-                        String::from_utf8_lossy(&charset)
-                    )?;
+                    write!(ofile, "   Charset: {}\n", String::from_utf8_lossy(&charset))?;
                 }
 
                 if let Some(comment) = header.comment {
-                    write!(
-                        ofile,
-                        "   Comment: {}\n",
-                        String::from_utf8_lossy(&comment)
-                    )?;
+                    write!(ofile, "   Comment: {}\n", String::from_utf8_lossy(&comment))?;
                 }
             }
         }
@@ -315,7 +327,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             IFile::File(f) => cmd_cat(f, ofile, args),
             _ => Err("Input must be a file ('-i')".into()),
         },
-        Some("ls") => Err("'ls' is not implemented yet".into()),
+        Some("ls") => match ifile {
+            IFile::File(f) => cmd_ls(f, ofile, args),
+            _ => Err("Input must be a file ('-i')".into()),
+        },
         Some("stat") => match ifile {
             IFile::File(f) => cmd_stat(f, ofile, args),
             _ => Err("Input must be a file ('-i')".into()),
