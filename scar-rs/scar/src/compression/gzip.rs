@@ -2,6 +2,13 @@ use super::{Compressor, CompressorFactory, Decompressor, DecompressorFactory};
 use flate2;
 use std::io::{self, Read, Write};
 
+const EOF_MARKER: &[u8] = &[
+    0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x0b, 0x76, 0x76, 0x0c, 0xd2, 0x75,
+    0xf5, 0x77, 0xe3, 0x02, 0x00, 0xf8, 0xf3, 0x55, 0x01, 0x09, 0x00, 0x00, 0x00,
+];
+
+const MAGIC: &[u8] = &[0x1f, 0x8b];
+
 struct GzipCompressor {
     w: flate2::write::GzEncoder<Box<dyn Write>>,
 }
@@ -41,6 +48,10 @@ impl CompressorFactory for GzipCompressorFactory {
             w: flate2::write::GzEncoder::new(w, self.level),
         })
     }
+
+    fn eof_marker(&self) -> &'static [u8] {
+        EOF_MARKER
+    }
 }
 
 struct GzipDecompressor {
@@ -74,7 +85,11 @@ impl DecompressorFactory for GzipDecompressorFactory {
         })
     }
 
+    fn eof_marker(&self) -> &'static [u8] {
+        EOF_MARKER
+    }
+
     fn magic(&self) -> &'static [u8] {
-        b"\x1f\x8b"
+        MAGIC
     }
 }

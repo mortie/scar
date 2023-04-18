@@ -125,8 +125,8 @@ impl ScarWriter {
         }
 
         self.checkpoint()?;
-        let chunks_checkpoint = self.checkpoints.last().unwrap().clone();
-        self.w.as_mut().unwrap().write_all(b"SCAR-CHUNKS\n")?;
+        let checkpoints_checkpoint = self.checkpoints.last().unwrap().clone();
+        self.w.as_mut().unwrap().write_all(b"SCAR-CHECKPOINTS\n")?;
         for entry in &self.checkpoints {
             write!(
                 self.w.as_mut().unwrap(),
@@ -141,10 +141,12 @@ impl ScarWriter {
             self.w.as_mut().unwrap(),
             "SCAR-TAIL\n{}\n{}\n",
             index_checkpoint.compressed_loc,
-            chunks_checkpoint.compressed_loc
+            checkpoints_checkpoint.compressed_loc
         )?;
 
-        self.w.take().unwrap().take().finish()
+        let mut w = self.w.take().unwrap().take().finish()?;
+        w.write_all(self.compressor_factory.eof_marker())?;
+        Ok(w)
     }
 
     pub fn write_block(&mut self, block: &pax::Block) -> io::Result<()> {

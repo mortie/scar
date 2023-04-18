@@ -99,8 +99,8 @@ SCAR-CHECKPOINTS
 6177 23552
 ```
 
-That SCAR-CHECKPOINTS section indicates that there's one checkpoint at offset 104 from the beginning of
-the compressed file which corresponds with offset 512 of the uncompressed file,
+That SCAR-CHECKPOINTS section indicates that there's one checkpoint at offset 104 from the beginning
+of the compressed file which corresponds with offset 512 of the uncompressed file,
 one checkpoint at offset 2195 which corresponds with offset 6656 in the uncompressed file,
 and one checkpoint at offset 6177 which corresponds with offset 23552 in the uncompressed file.
 
@@ -131,16 +131,47 @@ in the compressed file, and the SCAR-CHECKPOINTS section can be found by seeking
 in the compressed file.
 
 The implementation _must_ create a checkpoint right before the start of the SCAR-TAIL section.
-The checkpoint starts with some magic bytes defined by the compression format;
-the implementation must avoid producing those magic bytes within the compressed
-data for the SCAR-TAIL section.
-The compressed data for the SCAR-TAIL section must be contained within 512 bytes.
+
+### The SCAR-EOF section
+
+The SCAR-EOF section consists of just the text "SCAR-EOF\n". For each compression format,
+Scar defines a single canonical way to encode "SCAR-EOF\n", which the scar archive _must_
+end with. The canonical way to encode "SCAR-EOF\n" is called the "EOF marker".
+
+The purpose of the SCAR-EOF section is to make it easy to determine the compression format
+used by the Scar archive by looking at the EOF marker at the end of the file.
+It is an error for a Scar archive to end with any other bytes than one of the EOF markers
+listed below.
 
 ### Compression formats
 
-The standard compression formats are:
+The standard compression formats, as well as their magic bytes and EOF markers, are:
 
-* **gzip**: magic bytes: `1f 8b`
-* **bzip2**: magic bytes: `42 5a 68`
-* **xz**: magic bytes: `fd 37 7a 58 00`
-* **zstd**: magic bytes: `28 b5 2f fd`
+* **plain**: Magic bytes: `53 43 41 52 2d 54 41 49 4c 0a`, EOF marker:
+
+    53 43 41 52 2d 45 4f 46 0a
+
+* **gzip**: Magic bytes: `1f 8b`, EOF marker:
+
+    1f 8b 08 00 00 00 00 00 02 03 0b 76 76 0c d2 75
+    f5 77 e3 02 00 f8 f3 55 01 09 00 00 00
+
+* **bzip2**: Magic bytes: `42 5a 68`, EOF marker:
+
+    42 5a 68 39 31 41 59 26 53 59 6b f1 37 53 00 00
+    04 56 00 00 10 00 02 2b 00 98 00 20 00 31 06 4c
+    41 01 91 ea 3e 63 00 f1 77 24 53 85 09 06 bf 13
+    75 30
+
+* **xz**: Magic bytes: `fd 37 7a 58 00`, EOF marker:
+
+    fd 37 7a 58 5a 00 00 04 e6 d6 b4 46 02 00 21 01
+    1c 00 00 00 10 cf 58 cc 01 00 08 53 43 41 52 2d
+    45 4f 46 0a 00 00 00 00 a2 8d f2 f6 3c cc 0f cb
+    00 01 21 09 6c 18 c5 d5 1f b6 f3 7d 01 00 00 00
+    00 04 59 5a
+
+* **zstd**: Magic bytes: `28 b5 2f fd`, EOF marker:
+
+    28 b5 2f fd 04 58 49 00 00 53 43 41 52 2d 45 4f
+    46 0a 3a b2 49 61

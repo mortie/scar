@@ -1,15 +1,12 @@
 use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
-use crate::util::{find_last_occurrence, read_num_from_bufread, Checkpoint};
+use crate::util::{find_last_occurrence, read_num_from_bufread, Checkpoint, ReadSeek};
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Seek};
 use std::iter::Iterator;
 use std::rc::Rc;
-
-pub trait ReadSeek: Read + Seek {}
-impl<T> ReadSeek for T where T: Read + Seek {}
 
 #[derive(Clone)]
 pub struct RSCell {
@@ -42,21 +39,12 @@ pub struct ScarReader {
 }
 
 impl ScarReader {
-    pub fn new<R: ReadSeek + 'static>(r: R) -> Result<Self, Box<dyn Error>> {
-        Self::try_new(Rc::new(RefCell::new(Box::new(r))))
+    pub fn new<R: ReadSeek + 'static>(mut r: R) -> Result<Self, Box<dyn Error>> {
+        let df = compression::guess_decompressor(&mut r)?;
+        Self::try_new(Rc::new(RefCell::new(Box::new(r))), df)
     }
 
-    pub fn try_new(rc: Rc<RefCell<Box<dyn ReadSeek>>>) -> Result<Self, Box<dyn Error>> {
-        let df = Box::new(compression::GzipDecompressorFactory::new());
-        if let Ok(res) = Self::try_decompressor(rc.clone(), df) {
-            return Ok(res);
-        }
-
-        let df = Box::new(compression::PlainDecompressorFactory::new());
-        Self::try_decompressor(rc, df)
-    }
-
-    pub fn try_decompressor(
+    pub fn try_new(
         rc: Rc<RefCell<Box<dyn ReadSeek>>>,
         df: Box<dyn DecompressorFactory>,
     ) -> Result<Self, Box<dyn Error>> {
@@ -99,10 +87,10 @@ impl ScarReader {
 
             line.clear();
             br.read_until(b'\n', &mut line)?;
-            let compressed_chunks_loc =
+            let compressed_checkpoints_loc =
                 String::from_utf8_lossy(&line[..line.len() - 1]).parse::<u64>()?;
 
-            let checkpoints = Self::read_checkpoints(rc, compressed_chunks_loc, &df)?;
+            let checkpoints = Self::read_checkpoints(rc, compressed_checkpoints_loc, &df)?;
 
             return Ok(Self {
                 r,
@@ -115,23 +103,28 @@ impl ScarReader {
 
     fn read_checkpoints(
         rc: Rc<RefCell<Box<dyn ReadSeek>>>,
-        compressed_chunks_loc: u64,
+        compressed_checkpoints_loc: u64,
         df: &Box<dyn DecompressorFactory>,
     ) -> Result<Vec<Checkpoint>, Box<dyn Error>> {
         rc.borrow_mut()
-            .seek(io::SeekFrom::Start(compressed_chunks_loc))?;
+            .seek(io::SeekFrom::Start(compressed_checkpoints_loc))?;
         let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())));
         let mut br = io::BufReader::new(dc);
         let mut chs = [0u8; 1];
-        let mut chunks = Vec::<Checkpoint>::new();
+        let mut checkpoints = Vec::<Checkpoint>::new();
 
         let mut line = Vec::<u8>::new();
         br.read_until(b'\n', &mut line)?;
-        if line != b"SCAR-CHUNKS\n" {
-            return Err("Invalid chunk header\n".into());
+        if line != b"SCAR-CHECKPOINTS\n" {
+            return Err("Invalid checkpoints header\n".into());
         }
 
-        while br.fill_buf()?.len() > 0 {
+        loop {
+            let buf = br.fill_buf()?;
+            if buf.len() == 0 || buf.starts_with(b"SCAR-TAIL\n") {
+                break;
+            }
+
             let (compressed_loc, _) = read_num_from_bufread(&mut br)?;
 
             br.read_exact(&mut chs)?;
@@ -146,13 +139,13 @@ impl ScarReader {
                 return Err("Invalid chunk".into());
             }
 
-            chunks.push(Checkpoint {
+            checkpoints.push(Checkpoint {
                 compressed_loc,
                 raw_loc,
             });
         }
 
-        Ok(chunks)
+        Ok(checkpoints)
     }
 
     pub fn index(&mut self) -> Result<IndexIter, Box<dyn Error>> {
@@ -259,7 +252,7 @@ impl Iterator for IndexIter {
             Ok(b) => b,
         };
 
-        if b.len() == 0 {
+        if b.len() == 0 || b.starts_with(b"SCAR-CHECKPOINTS\n") {
             return None;
         }
 

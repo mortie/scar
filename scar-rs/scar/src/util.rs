@@ -1,5 +1,8 @@
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Read, Seek};
 use std::ops::{AddAssign, DivAssign};
+
+pub trait ReadSeek: Read + Seek {}
+impl<T> ReadSeek for T where T: Read + Seek {}
 
 #[derive(Debug, Clone)]
 pub struct Checkpoint {

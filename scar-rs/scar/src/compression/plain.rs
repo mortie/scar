@@ -1,6 +1,9 @@
 use super::{Compressor, CompressorFactory, Decompressor, DecompressorFactory};
 use std::io::{self, Read, Write};
 
+const EOF_MARKER: &[u8] = b"SCAR-EOF\n";
+const MAGIC: &[u8] = b"SCAR-TAIL\n";
+
 struct PlainCompressor {
     w: Box<dyn Write>,
 }
@@ -33,6 +36,10 @@ impl CompressorFactory for PlainCompressorFactory {
     fn create_compressor(&self, w: Box<dyn Write>) -> Box<dyn Compressor> {
         Box::new(PlainCompressor { w })
     }
+
+    fn eof_marker(&self) -> &'static [u8] {
+        EOF_MARKER
+    }
 }
 
 struct PlainDecompressor {
@@ -64,7 +71,11 @@ impl DecompressorFactory for PlainDecompressorFactory {
         Box::new(PlainDecompressor { r })
     }
 
+    fn eof_marker(&self) -> &'static [u8] {
+        EOF_MARKER
+    }
+
     fn magic(&self) -> &'static [u8] {
-        b"SCAR-TAIL\n"
+        MAGIC
     }
 }
