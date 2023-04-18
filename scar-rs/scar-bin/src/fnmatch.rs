@@ -10,7 +10,7 @@ pub fn glob_to_regex_string(glob: &str) -> String {
         if chars.peek().map(|x| *x) == Some('/') {
             let _ = chars.next();
         } else {
-            rx.push('.');
+            rx += "\\.";
         }
     } else if chars.peek().map(|x| *x) == Some('/') {
         chars.next();
