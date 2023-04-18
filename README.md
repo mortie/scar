@@ -6,8 +6,8 @@ The format is intended to be compatible with existing tar implementations.
 "Tar" and "the tar family of file formats" is used here to mean anything that's commonly called "tar",
 including the original format from the 70s, the UStar format, the GNU tar format and the POSIX
 pax format.
-This Scar implementation tries to accept all variations as input.
-However, an implementation which only accepts POSIX pax would also be reasonable.
+
+This repository contains a reference implementation in the [scar-rs/](scar-rs) directory.
 
 ## The format
 
