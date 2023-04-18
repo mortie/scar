@@ -41,10 +41,17 @@ pub struct ScarReader {
 impl ScarReader {
     pub fn new<R: ReadSeek + 'static>(mut r: R) -> Result<Self, Box<dyn Error>> {
         let df = compression::guess_decompressor(&mut r)?;
-        Self::try_new(Rc::new(RefCell::new(Box::new(r))), df)
+        Self::create(Rc::new(RefCell::new(Box::new(r))), df)
     }
 
-    pub fn try_new(
+    pub fn with_decompressor<R: ReadSeek + 'static>(
+        r: R,
+        df: Box<dyn DecompressorFactory>,
+    ) -> Result<Self, Box<dyn Error>> {
+        Self::create(Rc::new(RefCell::new(Box::new(r))), df)
+    }
+
+    fn create(
         rc: Rc<RefCell<Box<dyn ReadSeek>>>,
         df: Box<dyn DecompressorFactory>,
     ) -> Result<Self, Box<dyn Error>> {
