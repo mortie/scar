@@ -4,12 +4,13 @@ use std::error::Error;
 use std::io::{self, Read, Write};
 
 pub mod gzip;
-pub use gzip::GzipCompressorFactory;
-pub use gzip::GzipDecompressorFactory;
+pub use gzip::{GzipCompressorFactory, GzipDecompressorFactory};
+
+pub mod xz;
+pub use xz::{XzCompressorFactory, XzDecompressorFactory};
 
 pub mod plain;
-pub use plain::PlainCompressorFactory;
-pub use plain::PlainDecompressorFactory;
+pub use plain::{PlainCompressorFactory, PlainDecompressorFactory};
 
 pub trait Compressor: Write {
     fn finish(self: Box<Self>) -> io::Result<Box<dyn Write>>;
@@ -35,13 +36,18 @@ pub fn guess_decompressor<R: ReadSeek>(
 ) -> Result<Box<dyn DecompressorFactory>, Box<dyn Error>> {
     let len = r.seek(io::SeekFrom::End(0))?;
 
-    let mut buf = [0u8; 32];
-    let mut slice = &mut buf[0..(min(len, 32) as usize)];
+    let mut buf = [0u8; 128];
+    let mut slice = &mut buf[0..(min(len, 128) as usize)];
 
-    r.seek(io::SeekFrom::Start(max(len - 32, 32)))?;
+    r.seek(io::SeekFrom::Start(max(len - 128, 128)))?;
     r.read_exact(&mut slice)?;
 
     let df = GzipDecompressorFactory::new();
+    if slice.ends_with(df.eof_marker()) {
+        return Ok(Box::new(df));
+    }
+
+    let df = XzDecompressorFactory::new();
     if slice.ends_with(df.eof_marker()) {
         return Ok(Box::new(df));
     }

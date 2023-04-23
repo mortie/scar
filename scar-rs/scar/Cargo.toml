@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 flate2 = "1.0"
+xz2 = "0.1"

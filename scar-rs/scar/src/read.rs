@@ -127,7 +127,11 @@ impl ScarReader {
         }
 
         loop {
-            let buf = br.fill_buf()?;
+            let buf = match br.fill_buf() {
+                Ok(buf) => buf,
+                Err(_) => break,
+            };
+
             if buf.len() == 0 || buf.starts_with(b"SCAR-TAIL\n") {
                 break;
             }
@@ -255,7 +259,7 @@ impl Iterator for IndexIter {
         }
 
         let b = match self.br.fill_buf() {
-            Err(err) => return Some(Err(err.into())),
+            Err(_) => return None,
             Ok(b) => b,
         };
 

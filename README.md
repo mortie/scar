@@ -169,7 +169,7 @@ f5 77 e3 02 00 f8 f3 55 01 09 00 00 00
 75 30
 ```
 
-* **xz**: Magic bytes: `fd 37 7a 58 00`, EOF marker:
+* **xz**: Magic bytes: `fd 37 7a 58 5a 00`, EOF marker:
 
 ```
 fd 37 7a 58 5a 00 00 04 e6 d6 b4 46 02 00 21 01
