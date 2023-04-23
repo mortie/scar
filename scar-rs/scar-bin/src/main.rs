@@ -290,12 +290,14 @@ fn usage(argv0: &str) {
     println!("  {} [options] stat <paths...>", argv0);
     println!("  {} [options] convert", argv0);
     println!("Options:");
-    println!("  -i<path>: Input file (default: stdin for 'convert')");
-    println!("  -o<path>: Output file (default: stdout)");
-    println!("  -c<format>: Compression format (gzip, plain, auto) (default: auto)");
+    println!("  -i<path>      Input file (default: stdin for 'convert')");
+    println!("  -o<path>      Output file (default: stdout)");
+    println!("  -c<format>    Compression format (gzip, plain, auto) (default: auto)");
+    println!("  -h, --help    Print this help text");
+    println!("  -v, --version Print version");
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main_fn() -> Result<(), Box<dyn Error>> {
     let mut ifile = IFile::Stdin(io::stdin());
     let mut ofile: Box<dyn Write> = Box::new(io::stdout());
     let mut comp = Compression::Auto;
@@ -329,6 +331,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     return Err(format!("Invalid compression: {}", arg_os.to_string_lossy()).into())
                 }
             };
+        } else if arg == b"-h" || arg == b"--help" {
+            usage(&argv0);
+            return Ok(());
+        } else if arg == b"-v" || arg == b"--version" {
+            println!("Scar {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
         } else {
             return Err(format!("Invalid option: {}", arg_os.to_string_lossy()).into());
         }
@@ -375,5 +383,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         _ => Err(format!("Unknown subcommand: {}", args[0].to_string_lossy()).into()),
+    }
+}
+
+fn main() {
+    if let Err(err) = main_fn() {
+        eprintln!("{}", err);
+        process::exit(1);
     }
 }
