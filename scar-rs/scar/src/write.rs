@@ -51,14 +51,14 @@ pub struct ScarWriter {
 }
 
 impl ScarWriter {
-    pub fn new(cf: Box<dyn CompressorFactory>, w: Box<dyn Write>) -> Self {
+    pub fn new(cf: Box<dyn CompressorFactory>, w: Box<dyn Write>) -> io::Result<Self> {
         let compressed_loc = Rc::new(AtomicU64::new(0));
         let raw_loc = Rc::new(AtomicU64::new(0));
         let compressor =
-            cf.create_compressor(Box::new(TrackedWrite::new(w, compressed_loc.clone())));
+            cf.create_compressor(Box::new(TrackedWrite::new(w, compressed_loc.clone())))?;
         let writer = TrackedWrite::new(compressor, raw_loc.clone());
 
-        Self {
+        Ok(Self {
             w: Some(writer),
             compressor_factory: cf,
             compressed_loc,
@@ -68,7 +68,7 @@ impl ScarWriter {
             scar_index: Vec::new(),
             checkpoint_interval: 1024 * 1024,
             last_checkpoint_compressed_loc: 0,
-        }
+        })
     }
 
     pub fn add_file<R: Read>(&mut self, r: &mut R, meta: &pax::Metadata) -> io::Result<()> {
@@ -176,7 +176,7 @@ impl ScarWriter {
         });
 
         self.w = Some(TrackedWrite {
-            w: self.compressor_factory.create_compressor(w),
+            w: self.compressor_factory.create_compressor(w)?,
             written: self.raw_loc.clone(),
         });
 

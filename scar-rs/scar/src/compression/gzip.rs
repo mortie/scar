@@ -43,10 +43,10 @@ impl GzipCompressorFactory {
 }
 
 impl CompressorFactory for GzipCompressorFactory {
-    fn create_compressor(&self, w: Box<dyn Write>) -> Box<dyn Compressor> {
-        Box::new(GzipCompressor {
+    fn create_compressor(&self, w: Box<dyn Write>) -> io::Result<Box<dyn Compressor>> {
+        Ok(Box::new(GzipCompressor {
             w: flate2::write::GzEncoder::new(w, self.level),
-        })
+        }))
     }
 
     fn eof_marker(&self) -> &'static [u8] {
@@ -79,10 +79,10 @@ impl GzipDecompressorFactory {
 }
 
 impl DecompressorFactory for GzipDecompressorFactory {
-    fn create_decompressor(&self, r: Box<dyn Read>) -> Box<dyn Decompressor> {
-        Box::new(GzipDecompressor {
+    fn create_decompressor(&self, r: Box<dyn Read>) -> io::Result<Box<dyn Decompressor>> {
+        Ok(Box::new(GzipDecompressor {
             r: flate2::read::GzDecoder::new(r),
-        })
+        }))
     }
 
     fn eof_marker(&self) -> &'static [u8] {

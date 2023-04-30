@@ -46,10 +46,10 @@ impl XzCompressorFactory {
 }
 
 impl CompressorFactory for XzCompressorFactory {
-    fn create_compressor(&self, w: Box<dyn Write>) -> Box<dyn Compressor> {
-        Box::new(XzCompressor {
+    fn create_compressor(&self, w: Box<dyn Write>) -> io::Result<Box<dyn Compressor>> {
+        Ok(Box::new(XzCompressor {
             w: xz2::write::XzEncoder::new(w, self.level),
-        })
+        }))
     }
 
     fn eof_marker(&self) -> &'static [u8] {
@@ -82,10 +82,10 @@ impl XzDecompressorFactory {
 }
 
 impl DecompressorFactory for XzDecompressorFactory {
-    fn create_decompressor(&self, r: Box<dyn Read>) -> Box<dyn Decompressor> {
-        Box::new(XzDecompressor {
+    fn create_decompressor(&self, r: Box<dyn Read>) -> io::Result<Box<dyn Decompressor>> {
+        Ok(Box::new(XzDecompressor {
             r: xz2::read::XzDecoder::new(r),
-        })
+        }))
     }
 
     fn eof_marker(&self) -> &'static [u8] {

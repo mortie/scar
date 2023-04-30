@@ -70,7 +70,7 @@ impl ScarReader {
             end = idx + magic.len() - 1;
 
             r.seek(io::SeekFrom::End(-512 + idx as i64))?;
-            let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())));
+            let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())))?;
             let mut br = io::BufReader::new(dc);
 
             let mut line = Vec::<u8>::new();
@@ -115,7 +115,7 @@ impl ScarReader {
     ) -> Result<Vec<Checkpoint>, Box<dyn Error>> {
         rc.borrow_mut()
             .seek(io::SeekFrom::Start(compressed_checkpoints_loc))?;
-        let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())));
+        let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())))?;
         let mut br = io::BufReader::new(dc);
         let mut chs = [0u8; 1];
         let mut checkpoints = Vec::<Checkpoint>::new();
@@ -163,7 +163,7 @@ impl ScarReader {
         self.r
             .seek(io::SeekFrom::Start(self.compressed_index_loc))?;
 
-        let mut br = BufReader::new(self.df.create_decompressor(Box::new(self.r.clone())));
+        let mut br = BufReader::new(self.df.create_decompressor(Box::new(self.r.clone()))?);
 
         let mut line = Vec::<u8>::new();
         br.read_until(b'\n', &mut line)?;
@@ -205,20 +205,19 @@ impl ScarReader {
             }
         }
 
-        self.r
-            .seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
-        let mut dc = self.df.create_decompressor(Box::new(self.r.clone()));
+        self.r.seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
+        let mut dc = self.df.create_decompressor(Box::new(self.r.clone()))?;
 
         let mut diff = raw_loc - checkpoint.raw_loc;
         let mut buf = [0u8; 1024];
 
         while diff >= 1024 {
-            dc.read(&mut buf)?;
+            dc.read_exact(&mut buf)?;
             diff -= 1024;
         }
 
         if diff > 0 {
-            dc.read(&mut buf[0..(diff as usize)])?;
+            dc.read_exact(&mut buf[0..(diff as usize)])?;
         }
 
         Ok(dc)

@@ -4,13 +4,16 @@ use std::error::Error;
 use std::io::{self, Read, Write};
 
 pub mod gzip;
-pub use gzip::{GzipCompressorFactory, GzipDecompressorFactory};
+pub use self::gzip::{GzipCompressorFactory, GzipDecompressorFactory};
 
 pub mod xz;
-pub use xz::{XzCompressorFactory, XzDecompressorFactory};
+pub use self::xz::{XzCompressorFactory, XzDecompressorFactory};
+
+pub mod zstd;
+pub use self::zstd::{ZstdCompressorFactory, ZstdDecompressorFactory};
 
 pub mod plain;
-pub use plain::{PlainCompressorFactory, PlainDecompressorFactory};
+pub use self::plain::{PlainCompressorFactory, PlainDecompressorFactory};
 
 pub trait Compressor: Write {
     fn finish(self: Box<Self>) -> io::Result<Box<dyn Write>>;
@@ -21,12 +24,12 @@ pub trait Decompressor: Read {
 }
 
 pub trait CompressorFactory {
-    fn create_compressor(&self, w: Box<dyn Write>) -> Box<dyn Compressor>;
+    fn create_compressor(&self, w: Box<dyn Write>) -> io::Result<Box<dyn Compressor>>;
     fn eof_marker(&self) -> &'static [u8];
 }
 
 pub trait DecompressorFactory {
-    fn create_decompressor(&self, w: Box<dyn Read>) -> Box<dyn Decompressor>;
+    fn create_decompressor(&self, w: Box<dyn Read>) -> io::Result<Box<dyn Decompressor>>;
     fn eof_marker(&self) -> &'static [u8];
     fn magic(&self) -> &'static [u8];
 }
@@ -48,6 +51,11 @@ pub fn guess_decompressor<R: ReadSeek>(
     }
 
     let df = XzDecompressorFactory::new();
+    if slice.ends_with(df.eof_marker()) {
+        return Ok(Box::new(df));
+    }
+
+    let df = ZstdDecompressorFactory::new();
     if slice.ends_with(df.eof_marker()) {
         return Ok(Box::new(df));
     }

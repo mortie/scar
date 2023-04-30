@@ -33,8 +33,8 @@ impl PlainCompressorFactory {
 }
 
 impl CompressorFactory for PlainCompressorFactory {
-    fn create_compressor(&self, w: Box<dyn Write>) -> Box<dyn Compressor> {
-        Box::new(PlainCompressor { w })
+    fn create_compressor(&self, w: Box<dyn Write>) -> io::Result<Box<dyn Compressor>> {
+        Ok(Box::new(PlainCompressor { w }))
     }
 
     fn eof_marker(&self) -> &'static [u8] {
@@ -67,8 +67,8 @@ impl PlainDecompressorFactory {
 }
 
 impl DecompressorFactory for PlainDecompressorFactory {
-    fn create_decompressor(&self, r: Box<dyn Read>) -> Box<dyn Decompressor> {
-        Box::new(PlainDecompressor { r })
+    fn create_decompressor(&self, r: Box<dyn Read>) -> io::Result<Box<dyn Decompressor>> {
+        Ok(Box::new(PlainDecompressor { r }))
     }
 
     fn eof_marker(&self) -> &'static [u8] {

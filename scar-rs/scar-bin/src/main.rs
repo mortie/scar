@@ -46,6 +46,7 @@ enum IFile {
 enum Compression {
     Gzip(u32),
     Xz(u32),
+    Zstd(u32),
     Plain,
     Auto,
 }
@@ -55,6 +56,7 @@ impl Compression {
         match self {
             Compression::Gzip(level) => Box::new(compression::GzipCompressorFactory::new(*level)),
             Compression::Xz(level) => Box::new(compression::XzCompressorFactory::new(*level)),
+            Compression::Zstd(level) => Box::new(compression::ZstdCompressorFactory::new(*level)),
             Compression::Plain => Box::new(compression::PlainCompressorFactory::new()),
             Compression::Auto => Box::new(compression::GzipCompressorFactory::new(6)),
         }
@@ -69,6 +71,10 @@ impl Compression {
             Compression::Xz(_) => ScarReader::with_decompressor(
                 r,
                 Box::new(compression::XzDecompressorFactory::new()),
+            ),
+            Compression::Zstd(_) => ScarReader::with_decompressor(
+                r,
+                Box::new(compression::ZstdDecompressorFactory::new()),
             ),
             Compression::Plain => ScarReader::with_decompressor(
                 r,
@@ -267,7 +273,7 @@ fn cmd_convert(
     let mut reader = PaxReader::new(ifile);
 
     let cf = comp.create_compressor_factory();
-    let mut writer = ScarWriter::new(cf, ofile);
+    let mut writer = ScarWriter::new(cf, ofile)?;
 
     let mut block = pax::new_block();
     while let Some(header) = reader.next_header()? {
@@ -298,7 +304,7 @@ fn usage(argv0: &str) {
     println!("Options:");
     println!("  -i<path>      Input file (default: stdin for 'convert')");
     println!("  -o<path>      Output file (default: stdout)");
-    println!("  -c<format>    Compression format (gzip, xz, plain, auto) (default: auto)");
+    println!("  -c<format>    Compression format (gzip, xz, zstd, plain, auto) (default: auto)");
     println!("  -h, --help    Print this help text");
     println!("  -v, --version Print version");
 }
@@ -332,6 +338,7 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
             comp = match val {
                 Some("gzip") => Compression::Gzip(6),
                 Some("xz") => Compression::Xz(6),
+                Some("zstd") => Compression::Zstd(3),
                 Some("plain") => Compression::Plain,
                 Some("auto") => Compression::Auto,
                 _ => {
