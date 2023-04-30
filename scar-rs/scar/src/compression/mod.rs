@@ -42,7 +42,11 @@ pub fn guess_decompressor<R: ReadSeek>(
     let mut buf = [0u8; 128];
     let mut slice = &mut buf[0..(min(len, 128) as usize)];
 
-    r.seek(io::SeekFrom::Start(max(len - 128, 128)))?;
+    if len < 128 {
+        r.seek(io::SeekFrom::Start(0))?;
+    } else {
+        r.seek(io::SeekFrom::Start(max(len - 128, 128)))?;
+    }
     r.read_exact(&mut slice)?;
 
     let df = GzipDecompressorFactory::new();
