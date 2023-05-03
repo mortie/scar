@@ -57,9 +57,9 @@ pub fn read_num_from_bufread<BR: BufRead>(br: &mut BR) -> io::Result<(u64, usize
         for ch in buf {
             if *ch >= b'0' && *ch <= b'9' {
                 count += 1;
-                num *= 10;
-                num += (*ch - b'0') as u64;
-                num_len += 1;
+                num = num.wrapping_mul(10);
+                num = num.wrapping_add((*ch - b'0') as u64);
+                num_len = num_len.wrapping_add(1);
             } else {
                 br.consume(count);
                 return Ok((num, num_len));

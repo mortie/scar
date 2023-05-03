@@ -67,9 +67,9 @@ pub fn block_read_octal(block: &Block, field: UStarHdrField) -> u64 {
             break;
         }
 
-        num *= 8;
+        num = num.wrapping_mul(8);
         if ch >= b'0' && ch < b'8' {
-            num += (ch - b'0') as u64;
+            num = num.wrapping_add((ch - b'0') as u64);
         }
     }
 
@@ -107,8 +107,8 @@ pub fn block_read_size(block: &Block, field: UStarHdrField) -> u64 {
 
     let mut num = (block[field.start] & 0x7f) as u64;
     for i in (field.start + 1)..(field.start + field.length) {
-        num *= 256;
-        num += block[i] as u64;
+        num = num.wrapping_mul(256);
+        num = num.wrapping_add(block[i] as u64);
     }
 
     num
@@ -532,9 +532,9 @@ impl PaxMeta {
                     return Err("Invalid pax field".into());
                 }
 
-                size *= 10;
-                size += (ch - b'0') as isize;
-                num_digits += 1;
+                size = size.wrapping_mul(10);
+                size = size.wrapping_add((ch - b'0') as isize);
+                num_digits = num_digits.wrapping_add(1);
             }
 
             let mut remaining_size = size - num_digits - 1;
@@ -555,6 +555,10 @@ impl PaxMeta {
                 }
 
                 key.push(ch);
+            }
+
+            if remaining_size > 16 * 1024 {
+                return Err("Too large pax field".into());
             }
 
             let mut val = Vec::<u8>::new();

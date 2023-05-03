@@ -273,6 +273,10 @@ impl Iterator for IndexIter {
             Err(err) => return Some(Err(Box::new(err))),
         };
 
+        if field_length > 16 * 1024 {
+            return Some(Err("Too large index entry".into()));
+        }
+
         if let Err(err) = self.br.read_exact(&mut chs) {
             return Some(Err(Box::new(err)));
         } else if chs[0] != b' ' {
@@ -304,7 +308,12 @@ impl Iterator for IndexIter {
 
         if let Some(t) = pax::MetaType::from_char(typeflag) {
             if t == pax::MetaType::PaxGlobal {
-                let content_length = field_length - field_num_digits - 3 - offset_num_digits - 1;
+                let non_content_length = field_num_digits + 3 + offset_num_digits + 1;
+                if field_length < non_content_length {
+                    return Some(Err("Field length too short".into()));
+                }
+
+                let content_length = field_length - non_content_length;
                 let mut content = Vec::<u8>::new();
                 content.resize(content_length, 0);
                 if let Err(err) = self.br.read_exact(content.as_mut_slice()) {
@@ -320,7 +329,12 @@ impl Iterator for IndexIter {
             }
         }
 
-        let content_length = field_length - field_num_digits - 3 - offset_num_digits - 2;
+        let non_content_length = field_num_digits + 3 + offset_num_digits + 2;
+        if field_length < non_content_length {
+            return Some(Err("Field length too short".into()));
+        }
+
+        let content_length = field_length - non_content_length;
         let mut content = Vec::<u8>::new();
         content.resize(content_length, 0);
         if let Err(err) = self.br.read_exact(content.as_mut_slice()) {

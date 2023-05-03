@@ -1,8 +1,8 @@
 #![no_main]
 
+use libfuzzer_sys::fuzz_target;
 use scar::read::ScarReader;
 use std::io::Cursor;
-use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     let cursor = Cursor::new(data.to_vec());
