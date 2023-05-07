@@ -559,6 +559,8 @@ impl PaxMeta {
 
             if remaining_size > 16 * 1024 {
                 return Err("Too large pax field".into());
+            } else if remaining_size < 1 {
+                return Err("Too small pax field".into());
             }
 
             let mut val = Vec::<u8>::new();
