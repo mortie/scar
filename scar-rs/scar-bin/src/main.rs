@@ -390,7 +390,7 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
             IFile::File(f) => cmd_stat(f, ofile, args, comp),
             _ => Err("Input must be a file ('-i')".into()),
         },
-        Some("create") => cmd_create(ofile, args, comp),
+        Some("create") | Some("c") => cmd_create(ofile, args, comp),
         Some("convert") => {
             if args.len() > 1 {
                 return Err("'convert' expects no further arguments".into());
