@@ -205,7 +205,8 @@ impl ScarReader {
             }
         }
 
-        self.r.seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
+        self.r
+            .seek(io::SeekFrom::Start(checkpoint.compressed_loc))?;
         let mut dc = self.df.create_decompressor(Box::new(self.r.clone()))?;
 
         let mut diff = raw_loc - checkpoint.raw_loc;

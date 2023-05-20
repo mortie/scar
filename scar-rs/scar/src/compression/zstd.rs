@@ -1,6 +1,6 @@
 use super::{Compressor, CompressorFactory, Decompressor, DecompressorFactory};
+use std::io::{self, BufReader, Read, Write};
 use zstd;
-use std::io::{self, Read, Write, BufReader};
 
 const EOF_MARKER: &[u8] = &[
     0x28, 0xb5, 0x2f, 0xfd, 0x04, 0x58, 0x49, 0x00, 0x00, 0x53, 0x43, 0x41, 0x52, 0x2d, 0x45, 0x4f,
@@ -35,9 +35,7 @@ pub struct ZstdCompressorFactory {
 
 impl ZstdCompressorFactory {
     pub fn new(level: u32) -> Self {
-        Self {
-            level,
-        }
+        Self { level }
     }
 }
 

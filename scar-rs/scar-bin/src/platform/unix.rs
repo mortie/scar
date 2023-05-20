@@ -1,3 +1,4 @@
+use libc;
 use scar::pax;
 use scar::write::ScarWriter;
 use std::collections::HashMap;
@@ -8,7 +9,6 @@ use std::io::Write;
 use std::mem::MaybeUninit;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::PathBuf;
-use libc;
 
 use crate::osstr_as_bytes;
 use crate::Compression;
@@ -62,7 +62,13 @@ fn username_from_uid(uid: u64) -> Vec<u8> {
     let mut name = [0 as libc::c_char; 512];
     let mut result = std::ptr::null_mut();
     unsafe {
-        libc::getpwuid_r(uid as libc::uid_t, pw.as_mut_ptr(), &mut name[0], 512, &mut result)
+        libc::getpwuid_r(
+            uid as libc::uid_t,
+            pw.as_mut_ptr(),
+            &mut name[0],
+            512,
+            &mut result,
+        )
     };
 
     // Since 'name' is zero initialized, we just have an empty string if getpwuid_r failed
@@ -75,7 +81,13 @@ fn groupname_from_gid(gid: u64) -> Vec<u8> {
     let mut name = [0 as libc::c_char; 512];
     let mut result = std::ptr::null_mut();
     unsafe {
-        libc::getgrgid_r(gid as libc::uid_t, grp.as_mut_ptr(), &mut name[0], 512, &mut result)
+        libc::getgrgid_r(
+            gid as libc::uid_t,
+            grp.as_mut_ptr(),
+            &mut name[0],
+            512,
+            &mut result,
+        )
     };
 
     // Since 'name' is zero initialized, we just have an empty string if getgrgid_r failed

@@ -1,6 +1,6 @@
 use super::{Compressor, CompressorFactory, Decompressor, DecompressorFactory};
-use xz2;
 use std::io::{self, Read, Write};
+use xz2;
 
 const EOF_MARKER: &[u8] = &[
     0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00, 0x00, 0x04, 0xe6, 0xd6, 0xb4, 0x46, 0x02, 0x00, 0x21, 0x01,
@@ -39,9 +39,7 @@ pub struct XzCompressorFactory {
 
 impl XzCompressorFactory {
     pub fn new(level: u32) -> Self {
-        Self {
-            level,
-        }
+        Self { level }
     }
 }
 
