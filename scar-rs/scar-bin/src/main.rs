@@ -61,7 +61,7 @@ impl Compression {
             Compression::Xz(level) => Box::new(compression::XzCompressorFactory::new(*level)),
             Compression::Zstd(level) => Box::new(compression::ZstdCompressorFactory::new(*level)),
             Compression::Plain => Box::new(compression::PlainCompressorFactory::new()),
-            Compression::Auto => Box::new(compression::GzipCompressorFactory::new(6)),
+            Compression::Auto => Box::new(compression::ZstdCompressorFactory::new(3)),
         }
     }
 
