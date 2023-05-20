@@ -36,6 +36,7 @@ Usage:
   scar [options] cat <paths...>
   scar [options] ls <paths...>
   scar [options] stat <paths...>
+  scar [options] create <paths...>
   scar [options] convert
 Options:
   -i<path>: Input file (default: stdin for 'convert')
