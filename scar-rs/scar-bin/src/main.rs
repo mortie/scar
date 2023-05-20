@@ -14,11 +14,14 @@ use time;
 mod fnmatch;
 use fnmatch::glob_to_regex;
 
-fn osstr_as_bytes(s: &OsStr) -> &[u8] {
+mod platform;
+use platform::cmd_create;
+
+pub fn osstr_as_bytes(s: &OsStr) -> &[u8] {
     unsafe { std::mem::transmute(s) }
 }
 
-fn bytes_as_osstr(b: &[u8]) -> &OsStr {
+pub fn bytes_as_osstr(b: &[u8]) -> &OsStr {
     unsafe { std::mem::transmute(b) }
 }
 
@@ -43,7 +46,7 @@ enum IFile {
     Stdin(io::Stdin),
 }
 
-enum Compression {
+pub enum Compression {
     Gzip(u32),
     Xz(u32),
     Zstd(u32),
@@ -212,7 +215,7 @@ fn cmd_stat(
                 write!(ofile, "  Size: {}\n", header.size)?;
 
                 if header.devmajor != 0 || header.devminor != 0 {
-                    write!(ofile, "Device: {}/{}", header.devmajor, header.devminor)?;
+                    write!(ofile, "Device: {}/{}\n", header.devmajor, header.devminor)?;
                 }
 
                 if let Some(atime) = header.atime {
@@ -300,6 +303,7 @@ fn usage(argv0: &str) {
     println!("  {} [options] cat <paths...>", argv0);
     println!("  {} [options] ls <paths...>", argv0);
     println!("  {} [options] stat <paths...>", argv0);
+    println!("  {} [options] create <paths...>", argv0);
     println!("  {} [options] convert", argv0);
     println!("Options:");
     println!("  -i<path>      Input file (default: stdin for 'convert')");
@@ -386,6 +390,7 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
             IFile::File(f) => cmd_stat(f, ofile, args, comp),
             _ => Err("Input must be a file ('-i')".into()),
         },
+        Some("create") => cmd_create(ofile, args, comp),
         Some("convert") => {
             if args.len() > 1 {
                 return Err("'convert' expects no further arguments".into());

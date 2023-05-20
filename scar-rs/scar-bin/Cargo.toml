@@ -11,3 +11,6 @@ path = "src/main.rs"
 scar = { path = "../scar" }
 regex = "1.7"
 time = "0.3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
