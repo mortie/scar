@@ -4,12 +4,12 @@ use scar::pax::{self, PaxReader};
 use scar::read::ScarReader;
 use scar::write::ScarWriter;
 use std::env;
-use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::process;
 use time;
+use anyhow::{Result, anyhow};
 
 mod fnmatch;
 use fnmatch::glob_to_regex;
@@ -65,7 +65,7 @@ impl Compression {
         }
     }
 
-    fn create_reader(&self, r: File) -> Result<ScarReader, Box<dyn Error>> {
+    fn create_reader(&self, r: File) -> Result<ScarReader> {
         match self {
             Compression::Gzip(_) => ScarReader::with_decompressor(
                 r,
@@ -92,7 +92,7 @@ fn cmd_list(
     ifile: File,
     mut ofile: Box<dyn Write>,
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut reader = comp.create_reader(ifile)?;
     for entry in reader.index()? {
         let entry = entry?;
@@ -107,7 +107,7 @@ fn cmd_cat(
     mut ofile: Box<dyn Write>,
     args: &[OsString],
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut patterns = Vec::<Regex>::new();
     patterns.reserve(args.len());
     for arg in args {
@@ -142,7 +142,7 @@ fn cmd_ls(
     mut ofile: Box<dyn Write>,
     args: &[OsString],
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut patterns = Vec::<Regex>::new();
     patterns.reserve(args.len());
     for arg in args {
@@ -175,7 +175,7 @@ fn cmd_stat(
     mut ofile: Box<dyn Write>,
     args: &[OsString],
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut patterns = Vec::<Regex>::new();
     patterns.reserve(args.len());
     for arg in args {
@@ -272,7 +272,7 @@ fn cmd_convert(
     ifile: Box<dyn Read>,
     ofile: Box<dyn Write>,
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut reader = PaxReader::new(ifile);
 
     let cf = comp.create_compressor_factory();
@@ -313,7 +313,7 @@ fn usage(argv0: &str) {
     println!("  -v, --version Print version");
 }
 
-fn main_fn() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let mut ifile = IFile::Stdin(io::stdin());
     let mut ofile: Box<dyn Write> = Box::new(io::stdout());
     let mut comp = Compression::Auto;
@@ -346,7 +346,7 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
                 Some("plain") => Compression::Plain,
                 Some("auto") => Compression::Auto,
                 _ => {
-                    return Err(format!("Invalid compression: {}", arg_os.to_string_lossy()).into())
+                    return Err(anyhow!("Invalid compression: {}", arg_os.to_string_lossy()));
                 }
             };
         } else if arg == b"-h" || arg == b"--help" {
@@ -356,7 +356,7 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
             println!("Scar {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         } else {
-            return Err(format!("Invalid option: {}", arg_os.to_string_lossy()).into());
+            return Err(anyhow!("Invalid option: {}", arg_os.to_string_lossy()));
         }
     }
 
@@ -370,30 +370,30 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
     match subcmd {
         Some("list") => {
             if args.len() > 1 {
-                return Err("'list' expects no further arguments".into());
+                return Err(anyhow!("'list' expects no further arguments"));
             }
 
             match ifile {
                 IFile::File(ifile) => cmd_list(ifile, ofile, comp),
-                _ => Err("Input must be a file ('-i')".into()),
+                _ => Err(anyhow!("Input must be a file ('-i')")),
             }
         }
         Some("cat") => match ifile {
             IFile::File(f) => cmd_cat(f, ofile, args, comp),
-            _ => Err("Input must be a file ('-i')".into()),
+            _ => Err(anyhow!("Input must be a file ('-i')")),
         },
         Some("ls") => match ifile {
             IFile::File(f) => cmd_ls(f, ofile, args, comp),
-            _ => Err("Input must be a file ('-i')".into()),
+            _ => Err(anyhow!("Input must be a file ('-i')")),
         },
         Some("stat") => match ifile {
             IFile::File(f) => cmd_stat(f, ofile, args, comp),
-            _ => Err("Input must be a file ('-i')".into()),
+            _ => Err(anyhow!("Input must be a file ('-i')")),
         },
         Some("create") | Some("c") => cmd_create(ofile, args, comp),
         Some("convert") => {
             if args.len() > 1 {
-                return Err("'convert' expects no further arguments".into());
+                return Err(anyhow!("'convert' expects no further arguments"));
             }
 
             match ifile {
@@ -401,13 +401,6 @@ fn main_fn() -> Result<(), Box<dyn Error>> {
                 IFile::Stdin(s) => cmd_convert(Box::new(s), ofile, comp),
             }
         }
-        _ => Err(format!("Unknown subcommand: {}", args[0].to_string_lossy()).into()),
-    }
-}
-
-fn main() {
-    if let Err(err) = main_fn() {
-        eprintln!("{}", err);
-        process::exit(1);
+        _ => Err(anyhow!("Unknown subcommand: {}", args[0].to_string_lossy())),
     }
 }

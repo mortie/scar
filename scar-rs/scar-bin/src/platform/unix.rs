@@ -2,13 +2,13 @@ use libc;
 use scar::pax;
 use scar::write::ScarWriter;
 use std::collections::HashMap;
-use std::error::Error;
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Write;
 use std::mem::MaybeUninit;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::PathBuf;
+use anyhow::Result;
 
 use crate::osstr_as_bytes;
 use crate::Compression;
@@ -100,7 +100,7 @@ fn archive_recursive(
     path: &PathBuf,
     meta: fs::Metadata,
     hardlinks: &mut HashMap<(u64, u64), PathBuf>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut pax_meta = pax::Metadata {
         typeflag: pax::FileType::Unknown,
         mode: meta.mode() & 0o777,
@@ -180,7 +180,7 @@ pub fn cmd_create(
     ofile: Box<dyn Write>,
     args: &[OsString],
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let cf = comp.create_compressor_factory();
     let mut writer = ScarWriter::new(cf, ofile)?;
     let mut hardlinks = HashMap::new();

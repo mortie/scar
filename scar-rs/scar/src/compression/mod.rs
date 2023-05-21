@@ -1,7 +1,7 @@
 use crate::util::ReadSeek;
 use std::cmp::{max, min};
-use std::error::Error;
 use std::io::{self, Read, Write};
+use anyhow::{Result, anyhow};
 
 pub mod gzip;
 pub use self::gzip::{GzipCompressorFactory, GzipDecompressorFactory};
@@ -36,7 +36,7 @@ pub trait DecompressorFactory {
 
 pub fn guess_decompressor<R: ReadSeek>(
     mut r: R,
-) -> Result<Box<dyn DecompressorFactory>, Box<dyn Error>> {
+) -> Result<Box<dyn DecompressorFactory>> {
     let len = r.seek(io::SeekFrom::End(0))?;
 
     let mut buf = [0u8; 128];
@@ -69,5 +69,5 @@ pub fn guess_decompressor<R: ReadSeek>(
         return Ok(Box::new(df));
     }
 
-    Err("Found no known end marker".into())
+    Err(anyhow!("Found no known end marker"))
 }

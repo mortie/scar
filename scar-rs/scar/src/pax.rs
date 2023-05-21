@@ -1,9 +1,9 @@
 use crate::util;
 use std::cmp::min;
-use std::error::Error;
 use std::fmt;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::mem::size_of;
+use anyhow::{Result, anyhow};
 
 #[derive(Copy, Clone)]
 pub struct UStarHdrField {
@@ -321,7 +321,7 @@ impl Metadata {
     }
 }
 
-pub fn write_pax_bytes<W: Write>(w: &mut W, key: &[u8], val: &[u8]) -> io::Result<()> {
+pub fn write_pax_bytes<W: Write>(w: &mut W, key: &[u8], val: &[u8]) -> Result<()> {
     let size = 1 + key.len() + 1 + val.len() + 1; // ' ' key '=' val '\n'
     let mut digit_count = util::log10_ceil(size);
     if util::log10_ceil(size + digit_count) > digit_count {
@@ -337,15 +337,15 @@ pub fn write_pax_bytes<W: Write>(w: &mut W, key: &[u8], val: &[u8]) -> io::Resul
     Ok(())
 }
 
-pub fn write_pax_u64<W: Write>(w: &mut W, key: &[u8], val: u64) -> io::Result<()> {
+pub fn write_pax_u64<W: Write>(w: &mut W, key: &[u8], val: u64) -> Result<()> {
     write_pax_bytes(w, key, val.to_string().as_bytes())
 }
 
-pub fn write_pax_time<W: Write>(w: &mut W, key: &[u8], val: f64) -> io::Result<()> {
+pub fn write_pax_time<W: Write>(w: &mut W, key: &[u8], val: f64) -> Result<()> {
     write_pax_bytes(w, key, val.to_string().as_bytes())
 }
 
-fn write_header_block<W: Write>(w: &mut W, block: &mut Block) -> io::Result<()> {
+fn write_header_block<W: Write>(w: &mut W, block: &mut Block) -> Result<()> {
     block_write_str(block, UST_CHKSUM, &[b' '; UST_CHKSUM.length]);
     block_write_str(block, UST_MAGIC, b"ustar");
     block_write_str(block, UST_VERSION, b"00");
@@ -353,10 +353,11 @@ fn write_header_block<W: Write>(w: &mut W, block: &mut Block) -> io::Result<()> 
     let sum = block.iter().map(|x| *x as u64).sum();
     block_write_octal(block, UST_CHKSUM, sum);
 
-    w.write_all(block)
+    w.write_all(block)?;
+    Ok(())
 }
 
-pub fn write_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> io::Result<()> {
+pub fn write_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> Result<()> {
     let mut block = [0u8; size_of::<Block>()];
 
     while count >= size_of::<Block>() as u64 {
@@ -374,7 +375,7 @@ pub fn write_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) ->
     Ok(())
 }
 
-pub fn read_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> io::Result<()> {
+pub fn read_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> Result<()> {
     let mut block = [0u8; size_of::<Block>()];
 
     while count >= size_of::<Block>() as u64 {
@@ -391,7 +392,7 @@ pub fn read_content<W: Write, R: Read>(w: &mut W, r: &mut R, mut count: u64) -> 
     Ok(())
 }
 
-pub fn write_header<'a, W: Write>(w: &mut W, meta: &Metadata) -> io::Result<()> {
+pub fn write_header<'a, W: Write>(w: &mut W, meta: &Metadata) -> Result<()> {
     // We ignore all 'write_pax_*' errors here, since those functions will only fail if
     // writing to the underlying stream fails, and that won't happen when writing to a Vec
     let mut pax_str = Vec::<u8>::new();
@@ -466,12 +467,12 @@ pub fn write_header<'a, W: Write>(w: &mut W, meta: &Metadata) -> io::Result<()> 
     Ok(())
 }
 
-pub fn write_file<W: Write, R: Read>(w: &mut W, r: &mut R, meta: &Metadata) -> io::Result<()> {
+pub fn write_file<W: Write, R: Read>(w: &mut W, r: &mut R, meta: &Metadata) -> Result<()> {
     write_header(w, meta)?;
     write_content(w, r, meta.size)
 }
 
-pub fn write_raw_entry<W: Write>(w: &mut W, typeflag: u8, content: &Vec<u8>) -> io::Result<()> {
+pub fn write_raw_entry<W: Write>(w: &mut W, typeflag: u8, content: &Vec<u8>) -> Result<()> {
     let mut block = new_block();
     block[UST_TYPEFLAG.start] = typeflag;
     block_write_octal(&mut block, UST_SIZE, content.len() as u64);
@@ -513,7 +514,7 @@ impl PaxMeta {
         }
     }
 
-    pub fn parse<R: Read>(&mut self, r: &mut R) -> Result<(), Box<dyn Error>> {
+    pub fn parse<R: Read>(&mut self, r: &mut R) -> Result<()> {
         let mut key = Vec::<u8>::new();
 
         loop {
@@ -529,7 +530,7 @@ impl PaxMeta {
                 if ch == b' ' {
                     break;
                 } else if ch < b'0' || ch > b'9' {
-                    return Err("Invalid pax field".into());
+                    return Err(anyhow!("Invalid pax field"));
                 }
 
                 size = size.wrapping_mul(10);
@@ -541,11 +542,11 @@ impl PaxMeta {
             key.clear();
             loop {
                 if remaining_size < 1 {
-                    return Err("Invalid pax field: Unexpected EOF".into());
+                    return Err(anyhow!("Invalid pax field: Unexpected EOF"));
                 }
 
                 if r.read(&mut buf)? == 0 {
-                    return Err("Invalid pax field: Unexpected EOF".into());
+                    return Err(anyhow!("Invalid pax field: Unexpected EOF"));
                 }
 
                 remaining_size -= 1;
@@ -558,9 +559,9 @@ impl PaxMeta {
             }
 
             if remaining_size > 16 * 1024 {
-                return Err("Too large pax field".into());
+                return Err(anyhow!("Too large pax field"));
             } else if remaining_size < 1 {
-                return Err("Too small pax field".into());
+                return Err(anyhow!("Too small pax field"));
             }
 
             let mut val = Vec::<u8>::new();
@@ -568,10 +569,10 @@ impl PaxMeta {
             r.read_exact(&mut val.as_mut_slice())?;
 
             if r.read(&mut buf)? == 0 {
-                return Err("Invalid pax field: Unexpected EOF".into());
+                return Err(anyhow!("Invalid pax field: Unexpected EOF"));
             }
             if buf[0] != b'\n' {
-                return Err("Invalid pax field: Expected newline".into());
+                return Err(anyhow!("Invalid pax field: Expected newline"));
             }
 
             if key == b"atime" {
@@ -677,7 +678,7 @@ impl<R: Read> PaxReader<R> {
         }
     }
 
-    pub fn next_header(&mut self) -> Result<Option<Metadata>, Box<dyn Error>> {
+    pub fn next_header(&mut self) -> Result<Option<Metadata>> {
         let mut next_meta = PaxMeta::new();
         let mut block = [0u8; size_of::<Block>()];
 
@@ -705,7 +706,7 @@ impl<R: Read> PaxReader<R> {
             if block.iter().all(|x| *x == 0) {
                 return Ok(None);
             } else {
-                return Err("Incomplete end marker".into());
+                return Err(anyhow!("Incomplete end marker"));
             }
         }
 
@@ -807,11 +808,12 @@ impl<R: Read> PaxReader<R> {
         Ok(Some(meta))
     }
 
-    pub fn read_content<W: Write>(&mut self, w: &mut W, size: u64) -> io::Result<()> {
+    pub fn read_content<W: Write>(&mut self, w: &mut W, size: u64) -> Result<()> {
         read_content(w, &mut self.r, size)
     }
 
-    pub fn read_block(&mut self, block: &mut Block) -> io::Result<()> {
-        self.r.read_exact(block)
+    pub fn read_block(&mut self, block: &mut Block) -> Result<()> {
+        self.r.read_exact(block)?;
+        Ok(())
     }
 }

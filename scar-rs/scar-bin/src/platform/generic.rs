@@ -1,11 +1,11 @@
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Write;
-use std::error::Error;
 use std::time::UNIX_EPOCH;
 use scar::pax;
 use scar::write::ScarWriter;
 use std::path::PathBuf;
+use anyhow::Result;
 
 use crate::{Compression, osstr_as_bytes};
 
@@ -29,7 +29,7 @@ fn normalize_path(path: &[u8]) -> Vec<u8> {
     v
 }
 
-fn archive_recursive(w: &mut ScarWriter, path: &PathBuf, meta: fs::Metadata) -> Result<(), Box<dyn Error>> {
+fn archive_recursive(w: &mut ScarWriter, path: &PathBuf, meta: fs::Metadata) -> Result<()> {
     let mut pax_meta = pax::Metadata {
         typeflag: pax::FileType::Unknown,
         mode: meta_to_mode(&meta),
@@ -94,7 +94,7 @@ pub fn cmd_create(
     ofile: Box<dyn Write>,
     args: &[OsString],
     comp: Compression,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let cf = comp.create_compressor_factory();
     let mut writer = ScarWriter::new(cf, ofile)?;
 

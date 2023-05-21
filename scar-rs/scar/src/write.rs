@@ -4,6 +4,7 @@ use crate::util::{log10_ceil, Checkpoint};
 use std::io::{self, Read, Write};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use anyhow::Result;
 
 pub struct TrackedWrite<W: Write> {
     pub w: W,
@@ -51,7 +52,7 @@ pub struct ScarWriter {
 }
 
 impl ScarWriter {
-    pub fn new(cf: Box<dyn CompressorFactory>, w: Box<dyn Write>) -> io::Result<Self> {
+    pub fn new(cf: Box<dyn CompressorFactory>, w: Box<dyn Write>) -> Result<Self> {
         let compressed_loc = Rc::new(AtomicU64::new(0));
         let raw_loc = Rc::new(AtomicU64::new(0));
         let compressor =
@@ -71,14 +72,12 @@ impl ScarWriter {
         })
     }
 
-    pub fn add_file<R: Read>(&mut self, r: &mut R, meta: &pax::Metadata) -> io::Result<()> {
+    pub fn add_file<R: Read>(&mut self, r: &mut R, meta: &pax::Metadata) -> Result<()> {
         self.add_entry(meta)?;
-        pax::write_content(self.w.as_mut().unwrap(), r, meta.size)?;
-
-        Ok(())
+        pax::write_content(self.w.as_mut().unwrap(), r, meta.size)
     }
 
-    pub fn add_entry(&mut self, meta: &pax::Metadata) -> io::Result<()> {
+    pub fn add_entry(&mut self, meta: &pax::Metadata) -> Result<()> {
         self.consider_checkpoint()?;
 
         self.scar_index.push(IndexEntry {
@@ -92,7 +91,7 @@ impl ScarWriter {
         Ok(())
     }
 
-    pub fn add_global_meta(&mut self, meta: &pax::PaxMeta) -> io::Result<()> {
+    pub fn add_global_meta(&mut self, meta: &pax::PaxMeta) -> Result<()> {
         self.consider_checkpoint()?;
 
         let loc = self.raw_loc.load(Ordering::Relaxed);
@@ -112,7 +111,7 @@ impl ScarWriter {
         Ok(())
     }
 
-    pub fn finish(mut self) -> io::Result<Box<dyn Write>> {
+    pub fn finish(mut self) -> Result<Box<dyn Write>> {
         let block = pax::new_block();
         self.w.as_mut().unwrap().write_all(&block)?;
         self.w.as_mut().unwrap().write_all(&block)?;
@@ -149,11 +148,12 @@ impl ScarWriter {
         Ok(w)
     }
 
-    pub fn write_block(&mut self, block: &pax::Block) -> io::Result<()> {
-        self.w.as_mut().unwrap().write_all(block)
+    pub fn write_block(&mut self, block: &pax::Block) -> Result<()> {
+        self.w.as_mut().unwrap().write_all(block)?;
+        Ok(())
     }
 
-    fn consider_checkpoint(&mut self) -> io::Result<()> {
+    fn consider_checkpoint(&mut self) -> Result<()> {
         self.w.as_mut().unwrap().flush()?;
         let compressed_loc = self.compressed_loc.load(Ordering::Relaxed);
         if compressed_loc - self.last_checkpoint_compressed_loc > self.checkpoint_interval {
@@ -163,7 +163,7 @@ impl ScarWriter {
         Ok(())
     }
 
-    fn checkpoint(&mut self) -> io::Result<()> {
+    fn checkpoint(&mut self) -> Result<()> {
         let mut w = self.w.take().unwrap().take();
         w.flush()?;
         let w = w.finish()?;
@@ -183,7 +183,7 @@ impl ScarWriter {
         Ok(())
     }
 
-    fn write_entry(w: &mut TrackedWrite<Box<dyn Compressor>>, ent: &IndexEntry) -> io::Result<()> {
+    fn write_entry(w: &mut TrackedWrite<Box<dyn Compressor>>, ent: &IndexEntry) -> Result<()> {
         let len: u64 = 3 + log10_ceil(ent.raw_loc) + 1 + ent.data.len() as u64 + 1;
         let mut num_digits = log10_ceil(len);
         if log10_ceil(len + num_digits) > num_digits {
@@ -198,7 +198,7 @@ impl ScarWriter {
                 ent.typeflag as char,
                 ent.raw_loc
             )?;
-            w.write_all(ent.data.as_slice())
+            w.write_all(ent.data.as_slice())?;
         } else {
             write!(
                 w,
@@ -208,7 +208,8 @@ impl ScarWriter {
                 ent.raw_loc
             )?;
             w.write_all(ent.data.as_slice())?;
-            w.write_all(b"\n")
+            w.write_all(b"\n")?;
         }
+        Ok(())
     }
 }

@@ -2,11 +2,11 @@ use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
 use crate::util::{find_last_occurrence, read_num_from_bufread, Checkpoint, ReadSeek};
 use std::cell::RefCell;
-use std::error::Error;
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Seek};
 use std::iter::Iterator;
 use std::rc::Rc;
+use anyhow::{Result, anyhow};
 
 #[derive(Clone)]
 pub struct RSCell {
@@ -39,7 +39,7 @@ pub struct ScarReader {
 }
 
 impl ScarReader {
-    pub fn new<R: ReadSeek + 'static>(mut r: R) -> Result<Self, Box<dyn Error>> {
+    pub fn new<R: ReadSeek + 'static>(mut r: R) -> Result<Self> {
         let df = compression::guess_decompressor(&mut r)?;
         Self::create(Rc::new(RefCell::new(Box::new(r))), df)
     }
@@ -47,14 +47,14 @@ impl ScarReader {
     pub fn with_decompressor<R: ReadSeek + 'static>(
         r: R,
         df: Box<dyn DecompressorFactory>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self> {
         Self::create(Rc::new(RefCell::new(Box::new(r))), df)
     }
 
     fn create(
         rc: Rc<RefCell<Box<dyn ReadSeek>>>,
         df: Box<dyn DecompressorFactory>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self> {
         let mut r = RSCell::new(rc.clone());
 
         r.seek(io::SeekFrom::End(-512))?;
@@ -65,7 +65,7 @@ impl ScarReader {
         loop {
             let idx = match find_last_occurrence(&compressed_tail_block[0..end], &magic) {
                 Some(idx) => idx,
-                None => return Err("Found no tail marker".into()),
+                None => return Err(anyhow!("Found no tail marker")),
             };
             end = idx + magic.len() - 1;
 
@@ -112,7 +112,7 @@ impl ScarReader {
         rc: Rc<RefCell<Box<dyn ReadSeek>>>,
         compressed_checkpoints_loc: u64,
         df: &Box<dyn DecompressorFactory>,
-    ) -> Result<Vec<Checkpoint>, Box<dyn Error>> {
+    ) -> Result<Vec<Checkpoint>> {
         rc.borrow_mut()
             .seek(io::SeekFrom::Start(compressed_checkpoints_loc))?;
         let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())))?;
@@ -123,7 +123,7 @@ impl ScarReader {
         let mut line = Vec::<u8>::new();
         br.read_until(b'\n', &mut line)?;
         if line != b"SCAR-CHECKPOINTS\n" {
-            return Err("Invalid checkpoints header\n".into());
+            return Err(anyhow!("Invalid checkpoints header"));
         }
 
         loop {
@@ -140,14 +140,14 @@ impl ScarReader {
 
             br.read_exact(&mut chs)?;
             if chs[0] != b' ' {
-                return Err("Invalid chunk".into());
+                return Err(anyhow!("Invalid chunk"));
             }
 
             let (raw_loc, _) = read_num_from_bufread(&mut br)?;
 
             br.read_exact(&mut chs)?;
             if chs[0] != b'\n' {
-                return Err("Invalid chunk".into());
+                return Err(anyhow!("Invalid chunk"));
             }
 
             checkpoints.push(Checkpoint {
@@ -159,7 +159,7 @@ impl ScarReader {
         Ok(checkpoints)
     }
 
-    pub fn index(&mut self) -> Result<IndexIter, Box<dyn Error>> {
+    pub fn index(&mut self) -> Result<IndexIter> {
         self.r
             .seek(io::SeekFrom::Start(self.compressed_index_loc))?;
 
@@ -168,7 +168,7 @@ impl ScarReader {
         let mut line = Vec::<u8>::new();
         br.read_until(b'\n', &mut line)?;
         if line.as_slice() != b"SCAR-INDEX\n" {
-            return Err("Invalid index header".into());
+            return Err(anyhow!("Invalid index header"));
         }
 
         let seek_pos = self.r.seek(io::SeekFrom::Current(0))?;
@@ -184,7 +184,7 @@ impl ScarReader {
     pub fn read_item(
         &mut self,
         item: &IndexItem,
-    ) -> Result<pax::PaxReader<Box<dyn Decompressor>>, Box<dyn Error>> {
+    ) -> Result<pax::PaxReader<Box<dyn Decompressor>>> {
         let dc = self.seek_to_raw_loc(item.offset)?;
         let mut pr = pax::PaxReader::new(dc);
         pr.global_meta = item.global_meta.clone();
@@ -251,9 +251,9 @@ pub struct IndexIter {
 }
 
 impl Iterator for IndexIter {
-    type Item = Result<IndexItem, Box<dyn Error>>;
+    type Item = Result<IndexItem>;
 
-    fn next(&mut self) -> Option<Result<IndexItem, Box<dyn Error>>> {
+    fn next(&mut self) -> Option<Result<IndexItem>> {
         if let Err(err) = self.r.seek(io::SeekFrom::Start(self.seek_pos)) {
             return Some(Err(err.into()));
         }
@@ -271,58 +271,58 @@ impl Iterator for IndexIter {
 
         let (field_length, field_num_digits) = match read_num_from_bufread(&mut self.br) {
             Ok(res) => (res.0 as usize, res.1),
-            Err(err) => return Some(Err(Box::new(err))),
+            Err(err) => return Some(Err(err.into())),
         };
 
         if field_length > 16 * 1024 {
-            return Some(Err("Too large index entry".into()));
+            return Some(Err(anyhow!("Too large index entry")));
         }
 
         if let Err(err) = self.br.read_exact(&mut chs) {
-            return Some(Err(Box::new(err)));
+            return Some(Err(err.into()));
         } else if chs[0] != b' ' {
-            return Some(Err("Invalid index entry".into()));
+            return Some(Err(anyhow!("Invalid index entry")));
         }
 
         let typeflag = if let Err(err) = self.br.read_exact(&mut chs) {
-            return Some(Err(Box::new(err)));
+            return Some(Err(err.into()));
         } else {
             chs[0]
         };
 
         if let Err(err) = self.br.read_exact(&mut chs) {
-            return Some(Err(Box::new(err)));
+            return Some(Err(err.into()));
         } else if chs[0] != b' ' {
-            return Some(Err("Invalid index entry".into()));
+            return Some(Err(anyhow!("Invalid index entry")));
         }
 
         let (offset, offset_num_digits) = match read_num_from_bufread(&mut self.br) {
             Ok(res) => res,
-            Err(err) => return Some(Err(Box::new(err))),
+            Err(err) => return Some(Err(err.into())),
         };
 
         if let Err(err) = self.br.read_exact(&mut chs) {
-            return Some(Err(Box::new(err)));
+            return Some(Err(err.into()));
         } else if chs[0] != b' ' {
-            return Some(Err("Invalid index entry".into()));
+            return Some(Err(anyhow!("Invalid index entry")));
         }
 
         if let Some(t) = pax::MetaType::from_char(typeflag) {
             if t == pax::MetaType::PaxGlobal {
                 let non_content_length = field_num_digits + 3 + offset_num_digits + 1;
                 if field_length < non_content_length {
-                    return Some(Err("Field length too short".into()));
+                    return Some(Err(anyhow!("Field length too short")));
                 }
 
                 let content_length = field_length - non_content_length;
                 let mut content = Vec::<u8>::new();
                 content.resize(content_length, 0);
                 if let Err(err) = self.br.read_exact(content.as_mut_slice()) {
-                    return Some(Err(Box::new(err)));
+                    return Some(Err(err.into()));
                 }
 
                 if let Err(err) = self.global_meta.parse(&mut content.as_slice()) {
-                    return Some(Err(err));
+                    return Some(Err(err.into()));
                 }
 
                 // TODO: loop instead of recursion?
@@ -332,20 +332,20 @@ impl Iterator for IndexIter {
 
         let non_content_length = field_num_digits + 3 + offset_num_digits + 2;
         if field_length < non_content_length {
-            return Some(Err("Field length too short".into()));
+            return Some(Err(anyhow!("Field length too short")));
         }
 
         let content_length = field_length - non_content_length;
         let mut content = Vec::<u8>::new();
         content.resize(content_length, 0);
         if let Err(err) = self.br.read_exact(content.as_mut_slice()) {
-            return Some(Err(Box::new(err)));
+            return Some(Err(err.into()));
         }
 
         if let Err(err) = self.br.read_exact(&mut chs) {
-            return Some(Err(Box::new(err)));
+            return Some(Err(err.into()));
         } else if chs[0] != b'\n' {
-            return Some(Err("Invalid index entry".into()));
+            return Some(Err(anyhow!("Invalid index entry")));
         }
 
         self.seek_pos = match self.r.seek(io::SeekFrom::Current(0)) {
