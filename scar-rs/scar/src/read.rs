@@ -2,6 +2,7 @@ use crate::compression::{self, Decompressor, DecompressorFactory};
 use crate::pax;
 use crate::util::{find_last_occurrence, read_num_from_bufread, Checkpoint, ReadSeek};
 use std::cell::RefCell;
+use std::cmp::min;
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Seek};
 use std::iter::Iterator;
@@ -57,7 +58,13 @@ impl ScarReader {
     ) -> Result<Self> {
         let mut r = RSCell::new(rc.clone());
 
-        r.seek(io::SeekFrom::End(-512))?;
+        let file_len = r.seek(io::SeekFrom::End(0))?;
+        let tail_block_len = min(file_len, 512);
+        if file_len <= 512 {
+            r.seek(io::SeekFrom::Start(0))?;
+        } else {
+            r.seek(io::SeekFrom::Start(512))?;
+        }
         let mut compressed_tail_block = [0; 512];
         let mut end = r.read(&mut compressed_tail_block)?;
 
@@ -69,7 +76,7 @@ impl ScarReader {
             };
             end = idx + magic.len() - 1;
 
-            r.seek(io::SeekFrom::End(-512 + idx as i64))?;
+            r.seek(io::SeekFrom::End(idx as i64 - tail_block_len as i64))?;
             let dc = df.create_decompressor(Box::new(RSCell::new(rc.clone())))?;
             let mut br = io::BufReader::new(dc);
 
