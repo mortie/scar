@@ -1,0 +1,5 @@
+/build
+/.cache
+/libscar.so
+/test
+/compile_commands.json
