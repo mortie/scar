@@ -13,14 +13,14 @@ enum scar_io_whence {
 struct scar_io_reader {
 	/// Read up to 'len' bytes into 'buf'.
 	/// Return the number of bytes read, or -1 on error.
-	scar_ssize (*read)(struct scar_io_reader *r, void *buf, scar_size len);
+	scar_ssize (*read)(struct scar_io_reader *r, void *buf, size_t len);
 };
 
 /// Abstract stream writer style type which allows writing data.
 struct scar_io_writer {
 	/// Write up to 'len' bytes from 'buf'.
 	/// Return the number of bytes written, or -1 on error.
-	scar_ssize (*write)(struct scar_io_writer *w, const void *buf, scar_size len);
+	scar_ssize (*write)(struct scar_io_writer *w, const void *buf, size_t len);
 };
 
 /// Abstroct seeker style type which allows seeking to a different place in a stream.

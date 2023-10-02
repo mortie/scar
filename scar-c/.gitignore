@@ -1,5 +1,5 @@
 /build
 /.cache
 /libscar.so
-/test
+/scar-test
 /compile_commands.json

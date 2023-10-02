@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 enum scar_pax_filetype {
+	SCAR_FT_UNKNOWN,
 	SCAR_FT_FILE,
 	SCAR_FT_HARDLINK,
 	SCAR_FT_SYMLINK,
@@ -13,7 +14,6 @@ enum scar_pax_filetype {
 	SCAR_FT_BLOCKDEV,
 	SCAR_FT_DIRECTORY,
 	SCAR_FT_FIFO,
-	SCAR_FT_UNKNOWN,
 };
 
 /// Convert a char to its associated scar_pax_filetype.
@@ -49,8 +49,29 @@ struct scar_pax_meta {
 };
 
 /// Initialize a pax_meta struct to its "zero" value.
-/// Every double is set to NaN, every string is set to null.
+/// Every double is set to NaN, every string is set to null, and every unsigned int is set to ~0.
 void scar_pax_meta_init_empty(struct scar_pax_meta *meta);
+
+/// Initialize a pax_meta struct which represents a regular file.
+void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path);
+
+/// Initialize a pax_meta struct which represents a hardlink.
+void scar_pax_meta_init_hardlink(struct scar_pax_meta *meta, char *path, char *linkpath);
+
+/// Initialize a pax_meta struct which represents a symlink.
+void scar_pax_meta_init_symlink(struct scar_pax_meta *meta, char *path, char *linkpath);
+
+/// Initialize a pax_meta struct which represents a directory.
+void scar_pax_meta_init_directory(struct scar_pax_meta *meta, char *path);
+
+/// Initialize a pax_meta struct which represents a chardev.
+void scar_pax_meta_init_chardev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min);
+
+/// Initialize a pax_meta struct which represents a blockdev.
+void scar_pax_meta_init_blockdev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min);
+
+/// Initialize a pax_meta struct which represents a fifo.
+void scar_pax_meta_init_fifo(struct scar_pax_meta *meta, char *path);
 
 /// Copy a scar_pax_meta to 'dest' from 'src'.
 void scar_pax_meta_copy(struct scar_pax_meta *dest, struct scar_pax_meta *src);
@@ -64,5 +85,8 @@ void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w);
 
 /// Parse a single pax metadata block from the input stream, and populate the meta struct.
 /// Note: the function might read more than one USTAR header block.
+/// Returns 0 on success, -1 on error.
+int scar_pax_meta_parse(
+		struct scar_pax_meta *global, struct scar_pax_meta *meta, struct scar_io_reader *r);
 
 #endif
