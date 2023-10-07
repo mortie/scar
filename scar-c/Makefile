@@ -11,7 +11,16 @@ SCAR_TEST_SRCS := \
 	test/pax-syntax.t.c \
 #
 
-CFLAGS += -Wall -Wextra -Wconversion -Wpedantic -std=c99 -g -DSCAR_TRACE_ERROR
+CFLAGS := $(CFLAGS) \
+	-Wall -Wextra -Wconversion -Wpedantic \
+	-std=c99 -g -DSCAR_TRACE_ERROR -fPIC \
+#
+
+BIN_LDFLAGS := $(LDFLAGS) -L. -lscar
+
+ifeq ($(shell uname),Linux)
+BIN_LDFLAGS += -Wl,-rpath='$$ORIGIN'
+endif
 
 .PHONY: all
 all: libscar.so scar scar-test pax-analyze
@@ -30,16 +39,16 @@ check-lldb: scar-test
 	lldb -o 'breakpoint set -n scar_breakpoint -C finish' -o 'run' ./scar-test
 
 libscar.so: $(patsubst %,$(OUT)/%.o,$(LIBSCAR_SRCS))
-	$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$(CC) -shared -o $@ $^ $(LDFLAGS) -lm
 
 scar-test: $(patsubst %,$(OUT)/%.o,$(SCAR_TEST_SRCS)) libscar.so
-	$(CC) -o $@ $(filter %.o,$^) -L. -lscar
+	$(CC) -o $@ $(filter %.o,$^) $(BIN_LDFLAGS)
 
 scar: $(OUT)/cmd/scar.c.o libscar.so
-	$(CC) -o $@ $< -L. -lscar
+	$(CC) -o $@ $< $(BIN_LDFLAGS)
 
 pax-analyze: $(OUT)/cmd/pax-analyze.c.o libscar.so
-	$(CC) -o $@ $< -L. -lscar
+	$(CC) -o $@ $< $(BIN_LDFLAGS)
 
 $(OUT)/src/%.c.o: src/%.c
 	@mkdir -p $(@D)

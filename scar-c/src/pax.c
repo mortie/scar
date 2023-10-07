@@ -426,7 +426,7 @@ int scar_pax_meta_read(
 	if (!~meta->gid) meta->gid = block_read_u64(block, UST_GID);
 	if (!meta->gname) meta->gname = block_read_string(block, UST_GNAME);
 	if (!meta->linkpath) meta->linkpath = block_read_path(block, UST_LINKNAME);
-	if (isnan(meta->mtime)) meta->mtime = block_read_u64(block, UST_MTIME);
+	if (isnan(meta->mtime)) meta->mtime = (double)block_read_u64(block, UST_MTIME);
 	if (!meta->path) meta->path = block_read_path(block, UST_NAME);
 	if (!~meta->size) meta->size = block_read_size(block, UST_SIZE);
 	if (!~meta->uid) meta->uid = block_read_u64(block, UST_UID);
@@ -503,7 +503,7 @@ static int pax_write_field(struct scar_mem_writer *mw, char *name, void *buf, si
 static int pax_write_time(struct scar_mem_writer *mw, char *name, double time)
 {
 	int64_t seconds = (int64_t)floor(time);
-	int64_t nanos = (int64_t)round((time - seconds) * 1000000000.0);
+	int64_t nanos = (int64_t)round((time - (double)seconds) * 1000000000.0);
 
 	// We'll be writing the number in reverse into buf.
 	// Due to the 64-bit integer part and the nanosecond precision fractional part,
@@ -530,7 +530,7 @@ static int pax_write_time(struct scar_mem_writer *mw, char *name, double time)
 	// Start with the reverse fraction
 	int found_first_nonzero = 0;
 	do {
-		char digit = nanos % 10;
+		char digit = (char)(nanos % 10);
 		nanos /= 10;
 
 		if (found_first_nonzero || digit != 0) {
@@ -548,7 +548,7 @@ static int pax_write_time(struct scar_mem_writer *mw, char *name, double time)
 	// The fact that this is a 'do .. while' loop means that we *always* write
 	// at least one character to the buffer.
 	do {
-		*(--bufptr) = '0' + (seconds % 10);
+		*(--bufptr) = '0' + (char)(seconds % 10);
 		seconds /= 10;
 	} while (seconds > 0);
 

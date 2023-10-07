@@ -10,7 +10,7 @@ scar_ssize scar_io_printf(struct scar_io_writer *w, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	ssize_t ret = scar_io_vprintf(w, fmt, ap);
+	scar_ssize ret = scar_io_vprintf(w, fmt, ap);
 	va_end(ap);
 	return ret;
 }
@@ -26,9 +26,9 @@ scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap
 	}
 
 	void *mbuf = malloc((size_t)n + 1);
-	n = vsnprintf(mbuf, n + 1, fmt, ap);
+	n = vsnprintf(mbuf, (size_t)n + 1, fmt, ap);
 	printf("writing %d mallocd bytes\n", n);
-	ssize_t ret = w->write(w, mbuf, (size_t)n);
+	scar_ssize ret = w->write(w, mbuf, (size_t)n);
 	free(mbuf);
 	return ret;
 }
@@ -50,7 +50,7 @@ scar_ssize scar_file_read(struct scar_io_reader *r, void *buf, size_t len)
 		SCAR_ERETURN(-1);
 	}
 
-	return (ssize_t)n;
+	return (scar_ssize)n;
 }
 
 scar_ssize scar_file_write(struct scar_io_writer *w, const void *buf, size_t len)
@@ -61,7 +61,7 @@ scar_ssize scar_file_write(struct scar_io_writer *w, const void *buf, size_t len
 		SCAR_ERETURN(-1);
 	}
 
-	return (ssize_t)n;
+	return (scar_ssize)n;
 }
 
 static const int whences[] = {
