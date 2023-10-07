@@ -12,7 +12,7 @@
 TEST_GROUPS
 #undef X
 
-void scar_breakpoint()
+void scar_breakpoint(void)
 {
 }
 
@@ -32,10 +32,10 @@ static size_t run_group(size_t *base, const char *groupname, struct scar_test_gr
 	for (size_t i = 0; tg.tests[i]; ++i) {
 		char *end = strchr(names, ',');
 		if (end) {
-			size_t len = end - names;
+			size_t len = (size_t)(end - names);
 			memcpy(namebuf, names, len);
 			namebuf[len] = '\0';
-			names += len + 1;
+			names += len + 2;
 		} else {
 			strcpy(namebuf, names);
 		}
@@ -56,7 +56,7 @@ static size_t run_group(size_t *base, const char *groupname, struct scar_test_gr
 	return numsuccess;
 }
 
-int main()
+int main(void)
 {
 	size_t numtests = 0;
 #define X(name) numtests += count_tests(name ## __test_group);

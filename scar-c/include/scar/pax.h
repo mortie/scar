@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 
+/// The scar_pax_filetype enum represents the possible archive entry types in a pax archive.
 enum scar_pax_filetype {
 	SCAR_FT_UNKNOWN,
 	SCAR_FT_FILE,
@@ -25,8 +26,11 @@ enum scar_pax_filetype scar_pax_filetype_from_char(char ch);
 char scar_pax_filetype_to_char(enum scar_pax_filetype ft);
 
 /// Struct representing a pax entry's metadata.
-/// Any 'double' field might be NaN, any 'char *' field might be null.
-/// All 'char *' fields are owning pointers, and will be freed by the '_destroy' function.
+/// All fields are optional.
+/// A missing filetype field is represented by FT_UNKNOWN,
+/// a missing unsigned int field is represented by ~0 (all bits set to 1),
+/// a missing double field is represented by NaN,
+/// a missing string field is represented by a null pointer.
 struct scar_pax_meta {
 	enum scar_pax_filetype type;
 	uint32_t mode;
@@ -48,8 +52,7 @@ struct scar_pax_meta {
 	char *uname;
 };
 
-/// Initialize a pax_meta struct to its "zero" value.
-/// Every double is set to NaN, every string is set to null, and every unsigned int is set to ~0.
+/// Initialize all fields to their 'missing' value.
 void scar_pax_meta_init_empty(struct scar_pax_meta *meta);
 
 /// Initialize a pax_meta struct which represents a regular file.
@@ -83,10 +86,22 @@ void scar_pax_meta_destroy(struct scar_pax_meta *meta);
 /// Pretty-print a metadata struct, for debugging purposes.
 void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w);
 
-/// Parse a single pax metadata block from the input stream, and populate the meta struct.
-/// Note: the function might read more than one USTAR header block.
+/// Read all the metadata for the next pax entry.
+/// 'global' is expected to be initialized, and will be overwritten
+/// by the data in any 'g' metadata entry if it's encountered.
+/// 'meta' is expected to be uninitialized, its fields will be unconditionally overwritten
+/// without being freed.
+/// The reader 'r' is expected to be positioned right at the start of an archive entry.
 /// Returns 0 on success, -1 on error.
-int scar_pax_meta_parse(
+int scar_pax_meta_read(
 		struct scar_pax_meta *global, struct scar_pax_meta *meta, struct scar_io_reader *r);
+
+/// Write out a header for the given metadata.
+/// Will create exactly one 512-byte USTAR header block if the metadata is fully representable
+/// using the USTAR format,
+/// or one 'x'-type PAX extended header followed by a 512-byte USTAR header block if the metadata
+/// isn't fully representable using the USTAR format.
+/// Returns 0 on success, -1 on error.
+int scar_pax_meta_write(struct scar_pax_meta *meta, struct scar_io_writer *w);
 
 #endif

@@ -20,15 +20,15 @@ scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap
 	char buf[128];
 	int n = vsnprintf(buf, sizeof(buf), fmt, ap);
 	if (n < 0) {
-		return -1;
+		SCAR_ERETURN(-1);
 	} else if ((size_t)n <= sizeof(buf) - 1) {
-		return w->write(w, buf, n);
+		return w->write(w, buf, (size_t)n);
 	}
 
-	void *mbuf = malloc(n + 1);
+	void *mbuf = malloc((size_t)n + 1);
 	n = vsnprintf(mbuf, n + 1, fmt, ap);
 	printf("writing %d mallocd bytes\n", n);
-	ssize_t ret = w->write(w, mbuf, n);
+	ssize_t ret = w->write(w, mbuf, (size_t)n);
 	free(mbuf);
 	return ret;
 }
@@ -47,7 +47,7 @@ scar_ssize scar_file_read(struct scar_io_reader *r, void *buf, size_t len)
 	struct scar_file *sf = SCAR_BASE(struct scar_file, r);
 	size_t n = fread(buf, 1, len, sf->f);
 	if (n == 0 && ferror(sf->f)) {
-		return -1;
+		SCAR_ERETURN(-1);
 	}
 
 	return (ssize_t)n;
@@ -58,7 +58,7 @@ scar_ssize scar_file_write(struct scar_io_writer *w, const void *buf, size_t len
 	struct scar_file *sf = SCAR_BASE(struct scar_file, w);
 	size_t n = fwrite(buf, 1, len, sf->f);
 	if (n == 0 && ferror(sf->f)) {
-		return -1;
+		SCAR_ERETURN(-1);
 	}
 
 	return (ssize_t)n;
@@ -109,9 +109,9 @@ scar_ssize scar_mem_reader_read(struct scar_io_reader *r, void *buf, size_t len)
 		n = left;
 	}
 
-	memcpy(buf, mr->buf, n);
+	memcpy(buf, (unsigned char *)mr->buf + mr->pos, n);
 	mr->pos += n;
-	return n;
+	return (scar_ssize)n;
 }
 
 int scar_mem_reader_seek(struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence)
@@ -123,25 +123,47 @@ int scar_mem_reader_seek(struct scar_io_seeker *s, scar_offset offset, enum scar
 		newpos = offset;
 		break;
 	case SCAR_SEEK_CURRENT:
-		newpos = mr->pos + offset;
+		newpos = (scar_ssize)mr->pos + offset;
 		break;
 	case SCAR_SEEK_END:
-		newpos = mr->len + offset;
+		newpos = (scar_ssize)mr->len + offset;
 		break;
 	}
 
 	if (newpos < 0 || (size_t)newpos > mr->len) {
-		return -1;
+		SCAR_ERETURN(-1);
 	}
 
-	mr->pos = newpos;
+	mr->pos = (size_t)newpos;
 	return 0;
 }
 
 scar_offset scar_mem_reader_tell(struct scar_io_seeker *s)
 {
 	struct scar_mem_reader *mr = SCAR_BASE(struct scar_mem_reader, s);
-	return mr->pos;
+	return (scar_offset)mr->pos;
+}
+
+static int mem_writer_grow(struct scar_mem_writer *mw, size_t len)
+{
+	if (mw->cap < mw->len + len) {
+		if (mw->cap == 0) {
+			mw->cap = 8;
+		}
+
+		while (mw->cap < mw->len + len) {
+			mw->cap *= 2;
+		}
+
+		void *newbuf = realloc(mw->buf, mw->cap);
+		if (newbuf == NULL) {
+			SCAR_ERETURN(-1);
+		}
+
+		mw->buf = newbuf;
+	}
+
+	return 0;
 }
 
 void scar_mem_writer_init(struct scar_mem_writer *mw)
@@ -155,24 +177,22 @@ void scar_mem_writer_init(struct scar_mem_writer *mw)
 scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len)
 {
 	struct scar_mem_writer *mw = SCAR_BASE(struct scar_mem_writer, w);
-	if (mw->cap < mw->len + len) {
-		if (mw->cap == 0) {
-			mw->cap = 8;
-		}
-
-		while (mw->cap < mw->len + len) {
-			mw->cap *= 2;
-		}
-
-		void *newbuf = realloc(mw->buf, mw->cap);
-		if (newbuf == NULL) {
-			return -1;
-		}
-
-		mw->buf = newbuf;
+	if (!mem_writer_grow(mw, len)) {
+		SCAR_ERETURN(-1);
 	}
 
-	memcpy(&mw->buf[mw->len], buf, len);
+	memcpy(&((unsigned char *)mw->buf)[mw->len], buf, len);
 	mw->len += len;
-	return len;
+	return (scar_ssize)len;
+}
+
+void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len)
+{
+	if (mem_writer_grow(mw, len) < 0) {
+		return NULL;
+	}
+
+	void *buf = &((unsigned char *)mw->buf)[mw->len];
+	mw->len += len;
+	return buf;
 }

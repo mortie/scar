@@ -53,5 +53,6 @@ struct scar_mem_writer {
 
 void scar_mem_writer_init(struct scar_mem_writer *mw);
 scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
+void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len);
 
 #endif

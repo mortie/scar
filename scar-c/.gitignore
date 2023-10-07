@@ -2,4 +2,6 @@
 /.cache
 /libscar.so
 /scar-test
+/pax-analyze
+/scar
 /compile_commands.json

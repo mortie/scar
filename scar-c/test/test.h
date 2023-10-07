@@ -8,7 +8,7 @@ struct scar_test_result {
 	char *msg;
 };
 
-typedef struct scar_test_result (*scar_test)();
+typedef struct scar_test_result (*scar_test)(void);
 
 struct scar_test_group {
 	const char *names;
@@ -17,7 +17,7 @@ struct scar_test_group {
 
 /// A function which does nothing, but which is called before a test failure.
 /// Set a breakpoint on 'scar_breakpoint' in a debugger to pause when a test fails.
-void scar_breakpoint();
+void scar_breakpoint(void);
 
 #define TESTGROUP(name, ...) \
 static scar_test name ## __tests[] = { __VA_ARGS__, NULL }; \
@@ -26,7 +26,7 @@ struct scar_test_group name ## __test_group = { \
 	.tests = name ## __tests, \
 }
 
-#define TEST(name) static struct scar_test_result name()
+#define TEST(name) static struct scar_test_result name(void)
 
 #define OK() return (struct scar_test_result) { 1, NULL, 0, NULL }
 #define FAIL(msg) do { \
