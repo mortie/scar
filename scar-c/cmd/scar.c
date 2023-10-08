@@ -44,7 +44,7 @@ static int open_ofile(struct scar_file *sf, char *path)
 
 static void close_file(struct scar_file *sf)
 {
-	if (sf->f != stdin && sf->f != stdout) {
+	if (sf->f != NULL && sf->f != stdin && sf->f != stdout) {
 		fclose(sf->f);
 	}
 }
@@ -104,50 +104,61 @@ static int opt_end(char ***argv) {
 }
 
 static int do_convert(char **argv) {
+	int ret = 0;
+
+	struct scar_pax_meta global = {0};
+	struct scar_pax_meta meta = {0};
+
+	struct scar_file ifile = {0};
+	struct scar_file ofile = {0};
+
 	while (*argv) {
 		if (opt_end(&argv)) {
 			break;
 		} else {
 			printf("Unknown option: %s\n", *argv);
-			return 1;
+			ret = 1;
+			goto exit;
 		}
 	}
 
-	struct scar_file ifile;
 	if (open_ifile(&ifile, next_arg(&argv)) < 0) {
-		return 1;
+		ret = 1;
+		goto exit;
 	}
 
-	struct scar_file ofile;
 	if (open_ofile(&ofile, next_arg(&argv)) < 0) {
-		return 1;
+		ret = 1;
+		goto exit;
 	}
 
-	struct scar_pax_meta global;
 	scar_pax_meta_init_empty(&global);
-	struct scar_pax_meta meta;
 	while (1) {
-		int ret = scar_pax_read_meta(&global, &meta, &ifile.r);
-		if (ret < 0) {
-			return 1;
-		} else if (ret == 0) {
+		int r = scar_pax_read_meta(&global, &meta, &ifile.r);
+		if (r < 0) {
+			ret = 1;
+			goto exit;
+		} else if (r == 0) {
 			break;
 		}
 
 		if (scar_pax_write_entry(&meta, &ifile.r, &ofile.w) < 0) {
-			return 1;
+			ret = 1;
+			goto exit;
 		}
 	}
 
 	if (scar_pax_write_end(&ofile.w) < 0) {
-		return 1;
+		ret = 1;
+		goto exit;
 	}
 
+exit:
 	close_file(&ifile);
 	close_file(&ofile);
 	scar_pax_meta_destroy(&meta);
 	scar_pax_meta_destroy(&global);
-	return 0;
+	return ret;
 }
 
 int main(int argc, char **argv)
