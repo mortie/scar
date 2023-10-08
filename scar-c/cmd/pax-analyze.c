@@ -16,11 +16,18 @@ int main(void)
 	struct scar_pax_meta meta;
 
 	while (1) {
-		if (scar_pax_meta_read(&global, &meta, &in.r)) {
+		int ret = scar_pax_read_meta(&global, &meta, &in.r);
+		if (ret < 0) {
+			scar_pax_meta_destroy(&meta);
 			fprintf(stderr, "Error reading pax meta\n");
 			return 1;
+		} else if (ret == 0) {
+			return 0;
 		}
 
 		scar_pax_meta_print(&meta, &out.w);
+		scar_pax_meta_destroy(&meta);
 	}
+
+	scar_pax_meta_destroy(&global);
 }

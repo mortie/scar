@@ -3,217 +3,12 @@
 #include "util.h"
 #include "ioutil.h"
 #include "pax-syntax.h"
+#include "ustar.h"
 
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
-
-struct ustar_field {
-	size_t start;
-	size_t length;
-};
-
-const struct ustar_field UST_NAME = {0, 100};
-const struct ustar_field UST_MODE = {100, 8};
-const struct ustar_field UST_UID = {108, 8};
-const struct ustar_field UST_GID = {116, 8};
-const struct ustar_field UST_SIZE = {124, 12};
-const struct ustar_field UST_MTIME = {136, 12};
-const struct ustar_field UST_CHKSUM = {148, 8};
-const struct ustar_field UST_TYPEFLAG = {156, 1};
-const struct ustar_field UST_LINKNAME = {157, 100};
-const struct ustar_field UST_MAGIC = {257, 6};
-const struct ustar_field UST_VERSION = {263, 2};
-const struct ustar_field UST_UNAME = {265, 32};
-const struct ustar_field UST_GNAME = {297, 32};
-const struct ustar_field UST_DEVMAJOR = {329, 8};
-const struct ustar_field UST_DEVMINOR = {337, 8};
-const struct ustar_field UST_PREFIX = {345, 155};
-
-static char *dupstr(const char *src)
-{
-	if (!src) {
-		return NULL;
-	}
-
-	size_t len = strlen(src);
-	char *dest = malloc(len + 1);
-	memcpy(dest, src, len + 1);
-	return dest;
-}
-
-enum scar_pax_filetype scar_pax_filetype_from_char(char ch)
-{
-	switch (ch) {
-	case '0':
-	case '\0':
-	case '7':
-		return SCAR_FT_FILE;
-	case '1':
-		return SCAR_FT_HARDLINK;
-	case '2':
-		return SCAR_FT_SYMLINK;
-	case '3':
-		return SCAR_FT_CHARDEV;
-	case '4':
-		return SCAR_FT_BLOCKDEV;
-	case '5':
-		return SCAR_FT_DIRECTORY;
-	case '6':
-		return SCAR_FT_FIFO;
-	}
-
-	return SCAR_FT_UNKNOWN;
-}
-
-char scar_pax_filetype_to_char(enum scar_pax_filetype ft)
-{
-	switch (ft) {
-	case SCAR_FT_UNKNOWN:
-		return '?';
-	case SCAR_FT_FILE:
-		return '0';
-	case SCAR_FT_HARDLINK:
-		return '1';
-	case SCAR_FT_SYMLINK:
-		return '2';
-	case SCAR_FT_CHARDEV:
-		return '3';
-	case SCAR_FT_BLOCKDEV:
-		return '4';
-	case SCAR_FT_DIRECTORY:
-		return '5';
-	case SCAR_FT_FIFO:
-		return '6';
-	}
-
-	return '?';
-}
-
-void scar_pax_meta_init_empty(struct scar_pax_meta *meta)
-{
-	meta->type = SCAR_FT_UNKNOWN;
-	meta->mode = ~(uint32_t)0;
-	meta->devmajor = ~(uint32_t)0;
-	meta->devminor = ~(uint32_t)0;
-	meta->atime = NAN;
-	meta->charset = NULL;
-	meta->comment = NULL;
-	meta->gid = ~(uint64_t)0;
-	meta->gname = NULL;
-	meta->hdrcharset = NULL;
-	meta->linkpath = NULL;
-	meta->mtime = NAN;
-	meta->path = NULL;
-	meta->size = ~(uint64_t)0;
-	meta->uid = ~(uint64_t)0;
-	meta->uname = NULL;
-}
-
-void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_FILE;
-	meta->path = dupstr(path);
-}
-
-void scar_pax_meta_init_hardlink(struct scar_pax_meta *meta, char *path, char *linkpath)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_HARDLINK;
-	meta->path = dupstr(path);
-	meta->linkpath = dupstr(linkpath);
-}
-
-void scar_pax_meta_init_symlink(struct scar_pax_meta *meta, char *path, char *linkpath)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_SYMLINK;
-	meta->path = dupstr(path);
-	meta->linkpath = dupstr(linkpath);
-}
-
-void scar_pax_meta_init_directory(struct scar_pax_meta *meta, char *path)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_DIRECTORY;
-	meta->path = dupstr(path);
-}
-
-void scar_pax_meta_init_chardev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_CHARDEV;
-	meta->path = dupstr(path);
-	meta->devmajor = maj;
-	meta->devminor = min;
-}
-
-void scar_pax_meta_init_blockdev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_BLOCKDEV;
-	meta->path = dupstr(path);
-	meta->devmajor = maj;
-	meta->devminor = min;
-}
-
-void scar_pax_meta_init_fifo(struct scar_pax_meta *meta, char *path)
-{
-	scar_pax_meta_init_empty(meta);
-	meta->type = SCAR_FT_FIFO;
-	meta->path = dupstr(path);
-}
-
-void scar_pax_meta_copy(struct scar_pax_meta *dest, struct scar_pax_meta *src)
-{
-	memcpy(dest, src, sizeof(struct scar_pax_meta));
-	dest->charset = dupstr(src->charset);
-	dest->comment = dupstr(src->comment);
-	dest->gname = dupstr(src->gname);
-	dest->hdrcharset = dupstr(src->hdrcharset);
-	dest->linkpath = dupstr(src->linkpath);
-	dest->path = dupstr(src->path);
-	dest->uname = dupstr(src->uname);
-}
-
-void scar_pax_meta_destroy(struct scar_pax_meta *meta)
-{
-	free(meta->charset);
-	free(meta->comment);
-	free(meta->gname);
-	free(meta->hdrcharset);
-	free(meta->linkpath);
-	free(meta->path);
-	free(meta->uname);
-}
-
-void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w)
-{
-	scar_io_printf(w, "Metadata{\n");
-	scar_io_printf(w, "\ttype: %c\n", scar_pax_filetype_to_char(meta->type));
-
-	if (~meta->mode) scar_io_printf(w, "\tmode: 0%03" PRIu32 "\n", meta->mode);
-	if (~meta->devmajor) scar_io_printf(w, "\tdevmajor: %" PRIu32 "\n", meta->devmajor);
-	if (~meta->devminor) scar_io_printf(w, "\tdevminor: %" PRIu32 "\n", meta->devminor);
-
-	if (!isnan(meta->atime)) scar_io_printf(w, "\tatime: %f\n", meta->atime);
-	if (meta->charset) scar_io_printf(w, "\tcharset: %s\n", meta->charset);
-	if (meta->comment) scar_io_printf(w, "\tcomment: %s\n", meta->comment);
-
-	if (~meta->gid) scar_io_printf(w, "\tgid: %" PRIu64 "\n", meta->gid);
-	if (meta->gname) scar_io_printf(w, "\tgname: %s\n", meta->gname);
-	if (meta->hdrcharset) scar_io_printf(w, "\thdrcharset: %s\n", meta->hdrcharset);
-	if (meta->linkpath) scar_io_printf(w, "\tlinkpath: %s\n", meta->linkpath);
-	if (!isnan(meta->mtime)) scar_io_printf(w, "\tmtime: %f\n", meta->mtime);
-	if (meta->path) scar_io_printf(w, "\tpath: %s\n", meta->path);
-	if (~meta->size) scar_io_printf(w, "\tsize: %" PRIu64 "\n", meta->size);
-	if (~meta->uid) scar_io_printf(w, "\tuid: %" PRIu64 "\n", meta->uid);
-	if (meta->uname) scar_io_printf(w, "\tuname: %s\n", meta->uname);
-
-	scar_io_printf(w, "}\n");
-}
 
 static int read_bytes_block_aligned(void *buf, size_t size, struct scar_io_reader *r)
 {
@@ -261,13 +56,13 @@ static int read_pax_block_aligned(struct scar_pax_meta *meta, size_t size, struc
 	return 0;
 }
 
-static size_t block_field_strlen(const unsigned char *block, struct ustar_field field) {
+static size_t block_field_strlen(const unsigned char *block, struct scar_ustar_field field) {
 	size_t len;
 	for (len = 0; len < field.length && block[field.start + len]; ++len);
 	return len;
 }
 
-static uint64_t block_read_u64(const unsigned char *block, struct ustar_field field)
+static uint64_t block_read_u64(const unsigned char *block, struct scar_ustar_field field)
 {
 	const unsigned char *text = &block[field.start];
 	uint64_t num = 0;
@@ -284,12 +79,12 @@ static uint64_t block_read_u64(const unsigned char *block, struct ustar_field fi
 	return num;
 }
 
-static uint32_t block_read_u32(const unsigned char *block, struct ustar_field field)
+static uint32_t block_read_u32(const unsigned char *block, struct scar_ustar_field field)
 {
 	return (uint32_t)block_read_u64(block, field);
 }
 
-static uint64_t block_read_size(const unsigned char *block, struct ustar_field field)
+static uint64_t block_read_size(const unsigned char *block, struct scar_ustar_field field)
 {
 	const unsigned char *text = &block[field.start];
 	if (text[0] < 128) {
@@ -305,7 +100,7 @@ static uint64_t block_read_size(const unsigned char *block, struct ustar_field f
 	return num;
 }
 
-static char *block_read_string(const unsigned char *block, struct ustar_field field)
+static char *block_read_string(const unsigned char *block, struct scar_ustar_field field)
 {
 	size_t len = block_field_strlen(block, field);
 	char *path = malloc(len + 1);
@@ -314,9 +109,9 @@ static char *block_read_string(const unsigned char *block, struct ustar_field fi
 	return path;
 }
 
-static char *block_read_path(const unsigned char *block, struct ustar_field field)
+static char *block_read_path(const unsigned char *block, struct scar_ustar_field field)
 {
-	size_t pfx_len = block_field_strlen(block, UST_PREFIX);
+	size_t pfx_len = block_field_strlen(block, SCAR_UST_PREFIX);
 	size_t field_len = block_field_strlen(block, field);
 
 	if (pfx_len == 0) {
@@ -335,14 +130,14 @@ static char *block_read_path(const unsigned char *block, struct ustar_field fiel
 		return NULL;
 	}
 
-	memcpy(path, &block[UST_PREFIX.start], pfx_len);
+	memcpy(path, &block[SCAR_UST_PREFIX.start], pfx_len);
 	path[pfx_len] = '/';
 	memcpy(&path[pfx_len + 1], &block[field.start], field_len);
 	path[pfx_len + 1 + field_len] = '\0';
 	return path;
 }
 
-int scar_pax_meta_read(
+int scar_pax_read_meta(
 	struct scar_pax_meta *global, struct scar_pax_meta *meta, struct scar_io_reader *r)
 {
 	unsigned char block[512];
@@ -359,8 +154,8 @@ int scar_pax_meta_read(
 			SCAR_ERETURN(-1);
 		}
 
-		size = block_read_size(block, UST_SIZE);
-		ftype = (char)block[UST_TYPEFLAG.start];
+		size = block_read_size(block, SCAR_UST_SIZE);
+		ftype = (char)block[SCAR_UST_TYPEFLAG.start];
 
 		// GNU extension: path block.
 		if (ftype == 'L') {
@@ -420,22 +215,53 @@ int scar_pax_meta_read(
 		SCAR_ERETURN(-1);
 	}
 
-	if (!~meta->mode) meta->mode = block_read_u32(block, UST_MODE);
-	if (!~meta->devmajor) meta->devmajor = block_read_u32(block, UST_DEVMAJOR);
-	if (!~meta->devminor) meta->devminor = block_read_u32(block, UST_DEVMINOR);
-	if (!~meta->gid) meta->gid = block_read_u64(block, UST_GID);
-	if (!meta->gname) meta->gname = block_read_string(block, UST_GNAME);
-	if (!meta->linkpath) meta->linkpath = block_read_path(block, UST_LINKNAME);
-	if (isnan(meta->mtime)) meta->mtime = (double)block_read_u64(block, UST_MTIME);
-	if (!meta->path) meta->path = block_read_path(block, UST_NAME);
-	if (!~meta->size) meta->size = block_read_size(block, UST_SIZE);
-	if (!~meta->uid) meta->uid = block_read_u64(block, UST_UID);
-	if (!meta->uname) meta->uname = block_read_string(block, UST_UNAME);
+	if (!~meta->mode) meta->mode = block_read_u32(block, SCAR_UST_MODE);
+	if (!~meta->devmajor) meta->devmajor = block_read_u32(block, SCAR_UST_DEVMAJOR);
+	if (!~meta->devminor) meta->devminor = block_read_u32(block, SCAR_UST_DEVMINOR);
+	if (!~meta->gid) meta->gid = block_read_u64(block, SCAR_UST_GID);
+	if (!meta->gname) meta->gname = block_read_string(block, SCAR_UST_GNAME);
+	if (!meta->linkpath) meta->linkpath = block_read_path(block, SCAR_UST_LINKNAME);
+	if (isnan(meta->mtime)) meta->mtime = (double)block_read_u64(block, SCAR_UST_MTIME);
+	if (!meta->path) meta->path = block_read_path(block, SCAR_UST_NAME);
+	if (!~meta->size) meta->size = block_read_size(block, SCAR_UST_SIZE);
+	if (!~meta->uid) meta->uid = block_read_u64(block, SCAR_UST_UID);
+	if (!meta->uname) meta->uname = block_read_string(block, SCAR_UST_UNAME);
+
+	return 1;
+}
+
+int scar_pax_read_content(struct scar_io_reader *r, struct scar_io_writer *w, uint64_t size)
+{
+	unsigned char block[512];
+
+	while (size > 512) {
+		if (r->read(r, block, 512) < 512) {
+			SCAR_ERETURN(-1);
+		}
+
+		if (w->write(w, block, 512) < 512) {
+			SCAR_ERETURN(-1);
+		}
+
+		size -= 512;
+	}
+
+	if (size == 0) {
+		return 0;
+	}
+
+	if (r->read(r, block, 512) < 512) {
+		SCAR_ERETURN(-1);
+	}
+
+	if (w->write(w, block, size) < (scar_ssize)size) {
+		SCAR_ERETURN(-1);
+	}
 
 	return 0;
 }
 
-static void block_write_u64(unsigned char *block, struct ustar_field field, uint64_t num)
+static void block_write_u64(unsigned char *block, struct scar_ustar_field field, uint64_t num)
 {
 	if (!~num) {
 		num = 0;
@@ -444,7 +270,7 @@ static void block_write_u64(unsigned char *block, struct ustar_field field, uint
 	snprintf((char *)&block[field.start], field.length, "%0*" PRIo64, (int)field.length - 1, num);
 }
 
-static void block_write_u32(unsigned char *block, struct ustar_field field, uint32_t num)
+static void block_write_u32(unsigned char *block, struct scar_ustar_field field, uint32_t num)
 {
 	if (!~num) {
 		num = 0;
@@ -453,13 +279,24 @@ static void block_write_u32(unsigned char *block, struct ustar_field field, uint
 	snprintf((char *)&block[field.start], field.length, "%0*" PRIo32, (int)field.length - 1, num);
 }
 
-static void block_write_string(unsigned char *block, struct ustar_field field, char *str)
+static void block_write_string(unsigned char *block, struct scar_ustar_field field, char *str)
 {
 	if (str == NULL) {
 		str = "";
 	}
 
 	snprintf((char *)&block[field.start], field.length, "%s", str);
+}
+
+static void block_write_chksum(unsigned char *block)
+{
+	memset(&block[SCAR_UST_CHKSUM.start], ' ', SCAR_UST_CHKSUM.length);
+	uint64_t sum = 0;
+	for (size_t i = 0; i < 512; ++i) {
+		sum += block[i];
+	}
+
+	block_write_u64(block, SCAR_UST_CHKSUM, sum);
 }
 
 static size_t log10_ceil(size_t num)
@@ -573,7 +410,7 @@ static int pax_write_uint(struct scar_mem_writer *mw, char *name, uint64_t num)
 	return pax_write_field(mw, name, buf, (size_t)n);
 }
 
-int scar_pax_meta_write(struct scar_pax_meta *meta, struct scar_io_writer *w)
+int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 {
 	unsigned char block[512] = {0};
 
@@ -635,8 +472,11 @@ int scar_pax_meta_write(struct scar_pax_meta *meta, struct scar_io_writer *w)
 
 	// Write a pax extended metadata entry if necessary
 	if (paxhdr.len > 0) {
-		block[UST_TYPEFLAG.start] = 'x';
-		block_write_u64(block, UST_SIZE, (uint64_t)paxhdr.len);
+		memcpy(&block[SCAR_UST_MAGIC.start], "ustar", 6);
+		memcpy(&block[SCAR_UST_VERSION.start], "00", 2);
+		block[SCAR_UST_TYPEFLAG.start] = 'x';
+		block_write_u64(block, SCAR_UST_SIZE, (uint64_t)paxhdr.len);
+		block_write_chksum(block);
 		if (w->write(w, block, 512) < 512) {
 			SCAR_ERETURN(-1);
 		}
@@ -657,18 +497,80 @@ int scar_pax_meta_write(struct scar_pax_meta *meta, struct scar_io_writer *w)
 		}
 	}
 
-	block_write_string(block, UST_NAME, meta->path);
-	block_write_u32(block, UST_MODE, meta->mode);
-	block_write_u64(block, UST_UID, meta->uid);
-	block_write_u64(block, UST_GID, meta->gid);
-	block_write_u64(block, UST_SIZE, meta->size);
-	block_write_u64(block, UST_MTIME, meta->mtime > 0 ? (uint64_t)meta->mtime : 0);
-	block[UST_TYPEFLAG.start] = (unsigned char)scar_pax_filetype_to_char(meta->type);
-	block_write_string(block, UST_LINKNAME, meta->linkpath);
-	block_write_string(block, UST_UNAME, meta->uname);
-	block_write_string(block, UST_GNAME, meta->gname);
-	block_write_u32(block, UST_DEVMAJOR, meta->devmajor);
-	block_write_u32(block, UST_DEVMINOR, meta->devminor);
+	block_write_string(block, SCAR_UST_NAME, meta->path);
+	block_write_u32(block, SCAR_UST_MODE, meta->mode);
+	block_write_u64(block, SCAR_UST_UID, meta->uid);
+	block_write_u64(block, SCAR_UST_GID, meta->gid);
+	block_write_u64(block, SCAR_UST_SIZE, meta->size);
+	block_write_u64(block, SCAR_UST_MTIME, meta->mtime > 0 ? (uint64_t)meta->mtime : 0);
+	block[SCAR_UST_TYPEFLAG.start] = (unsigned char)scar_pax_filetype_to_char(meta->type);
+	block_write_string(block, SCAR_UST_LINKNAME, meta->linkpath);
+	memcpy(&block[SCAR_UST_MAGIC.start], "ustar", 6);
+	memcpy(&block[SCAR_UST_VERSION.start], "00", 2);
+	block_write_string(block, SCAR_UST_UNAME, meta->uname);
+	block_write_string(block, SCAR_UST_GNAME, meta->gname);
+	block_write_u32(block, SCAR_UST_DEVMAJOR, meta->devmajor);
+	block_write_u32(block, SCAR_UST_DEVMINOR, meta->devminor);
+	block_write_chksum(block);
+
+	if (w->write(w, block, 512) < 512) {
+		SCAR_ERETURN(-1);
+	}
+
+	return 0;
+}
+
+int scar_pax_write_content(struct scar_io_reader *r, struct scar_io_writer *w, uint64_t size)
+{
+	unsigned char block[512];
+
+	while (size > 512) {
+		if (r->read(r, block, 512) < 512) {
+			SCAR_ERETURN(-1);
+		}
+
+		if (w->write(w, block, 512) < 512) {
+			SCAR_ERETURN(-1);
+		}
+
+		size -= 512;
+	}
+
+	if (size == 0) {
+		return 0;
+	}
+
+	if (r->read(r, block, size) < (scar_ssize)size) {
+		SCAR_ERETURN(-1);
+	}
+
+	memset(&block[size], 0, 512 - size);
+
+	if (w->write(w, block, 512) < 512) {
+		SCAR_ERETURN(-1);
+	}
+
+	return 0;
+}
+
+int scar_pax_write_entry(
+		struct scar_pax_meta *meta, struct scar_io_reader *r, struct scar_io_writer *w)
+{
+	int ret = scar_pax_write_meta(meta, w);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return scar_pax_write_content(r, w, meta->size);
+}
+
+int scar_pax_write_end(struct scar_io_writer *w)
+{
+	char block[512] = {0};
+
+	if (w->write(w, block, 512) < 512) {
+		SCAR_ERETURN(-1);
+	}
 
 	if (w->write(w, block, 512) < 512) {
 		SCAR_ERETURN(-1);

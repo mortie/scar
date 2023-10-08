@@ -2,12 +2,14 @@ OUT ?= build
 
 LIBSCAR_SRCS := \
 	src/ioutil.c \
-	src/pax.c \
+	src/pax-meta.c \
 	src/pax-syntax.c \
+	src/pax.c \
 #
 
 SCAR_TEST_SRCS := \
 	test/main.c \
+	test/pax-syntax.t.c \
 	test/pax-syntax.t.c \
 #
 
@@ -23,7 +25,7 @@ BIN_LDFLAGS += -Wl,-rpath='$$ORIGIN'
 endif
 
 .PHONY: all
-all: libscar.so scar scar-test pax-analyze
+all: libscar.so scar scar-test pax-analyze tar-analyze
 
 .PHONY: clean
 clean:
@@ -50,6 +52,9 @@ scar: $(OUT)/cmd/scar.c.o libscar.so
 pax-analyze: $(OUT)/cmd/pax-analyze.c.o libscar.so
 	$(CC) -o $@ $< $(BIN_LDFLAGS)
 
+tar-analyze: $(OUT)/cmd/tar-analyze.c.o libscar.so
+	$(CC) -o $@ $< $(BIN_LDFLAGS)
+
 $(OUT)/src/%.c.o: src/%.c
 	@mkdir -p $(@D)
 	$(CC) -c -o $@ -MMD $(CFLAGS) -Iinclude/scar $<
@@ -65,4 +70,5 @@ $(OUT)/cmd/%.c.o: cmd/%.c
 	$(CC) -c -o $@ -MMD $(CFLAGS) -Iinclude $<
 $(OUT)/cmd/%.c.d: $(OUT)/cmd/%.c.o
 
--include $(patsubst %,$(OUT)/%.d,$(LIBSCAR_SRCS) $(SCAR_TEST_SRCS) cmd/scar.c)
+-include $(patsubst %,$(OUT)/%.d,$(LIBSCAR_SRCS) \
+	$(SCAR_TEST_SRCS) cmd/scar.c cmd/pax-analyze.c cmd/tar-analyze.c)
