@@ -554,7 +554,7 @@ int scar_pax_write_content(struct scar_io_reader *r, struct scar_io_writer *w, u
 {
 	unsigned char block[512];
 
-	while (size > 512) {
+	while (size >= 512) {
 		if (r->read(r, block, 512) < 512) {
 			SCAR_ERETURN(-1);
 		}
@@ -570,7 +570,7 @@ int scar_pax_write_content(struct scar_io_reader *r, struct scar_io_writer *w, u
 		return 0;
 	}
 
-	if (r->read(r, block, size) < (scar_ssize)size) {
+	if (r->read(r, block, 512) < (scar_ssize)size) {
 		SCAR_ERETURN(-1);
 	}
 

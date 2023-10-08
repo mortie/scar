@@ -1,17 +1,166 @@
+#include <errno.h>
 #include <scar/pax.h>
 #include <scar/ioutil.h>
+#include <string.h>
 
-int main(void)
+static void usage(char *argv0)
 {
+	printf("Usage: %s convert [in] [out]\n", argv0);
+}
+
+static int open_ifile(struct scar_file *sf, char *path)
+{
+	if (path == NULL || strcmp(path , "-") == 0) {
+		scar_file_init(sf, stdin);
+		return 0;
+	}
+
+	FILE *f = fopen(path, "r");
+	if (f == NULL) {
+		fprintf(stderr, "Open %s: %s\n", path, strerror(errno));
+		return -1;
+	}
+
+	scar_file_init(sf, f);
+	return 0;
+}
+
+static int open_ofile(struct scar_file *sf, char *path)
+{
+	if (path == NULL || strcmp(path , "-") == 0) {
+		scar_file_init(sf, stdout);
+		return 0;
+	}
+
+	FILE *f = fopen(path, "w");
+	if (f == NULL) {
+		fprintf(stderr, "Open %s: %s\n", path, strerror(errno));
+		return -1;
+	}
+
+	scar_file_init(sf, f);
+	return 0;
+}
+
+static void close_file(struct scar_file *sf)
+{
+	if (sf->f != stdin && sf->f != stdout) {
+		fclose(sf->f);
+	}
+}
+
+static int opt_arg(char ***argv, char *name, char **val)
+{
+	char *arg = **argv;
+	if (strcmp(arg, name) == 0) {
+		if ((*argv)[1] == NULL) {
+			return 0;
+		}
+
+		*argv += 1;
+		*val = **argv;
+		return 1;
+	}
+
+	size_t namelen = strlen(name);
+	if (strncmp(arg, name, namelen) == 0 && arg[namelen] == '=') {
+		*val = arg + namelen + 1;
+		return 1;
+	}
+
+	return 0;
+}
+
+static int opt(char ***argv, char *name)
+{
+	if (strcmp(**argv, name) == 0) {
+		*argv += 1;
+		return 1;
+	}
+
+	return 0;
+}
+
+static char *next_arg(char ***argv) {
+	char *arg = **argv;
+	if (arg == NULL) {
+		return NULL;
+	}
+
+	*argv += 1;
+	return arg;
+}
+
+static int opt_end(char ***argv) {
+	char *arg = **argv;
+	if (strcmp(arg, "--") == 0) {
+		*argv += 1;
+		return 1;
+	} else if (arg[0] != '-') {
+		return 1;
+	}
+
+	return 0;
+}
+
+static int do_convert(char **argv) {
+	while (*argv) {
+		if (opt_end(&argv)) {
+			break;
+		} else {
+			printf("Unknown option: %s\n", *argv);
+			return 1;
+		}
+	}
+
+	struct scar_file ifile;
+	if (open_ifile(&ifile, next_arg(&argv)) < 0) {
+		return 1;
+	}
+
+	struct scar_file ofile;
+	if (open_ofile(&ofile, next_arg(&argv)) < 0) {
+		return 1;
+	}
+
+	struct scar_pax_meta global;
+	scar_pax_meta_init_empty(&global);
 	struct scar_pax_meta meta;
-	scar_pax_meta_init_file(&meta, "Hello");
-	meta.atime = 100.440000001;
-	meta.type = SCAR_FT_FILE;
+	while (1) {
+		int ret = scar_pax_read_meta(&global, &meta, &ifile.r);
+		if (ret < 0) {
+			return 1;
+		} else if (ret == 0) {
+			break;
+		}
 
-	struct scar_file out;
-	scar_file_init(&out, stdout);
-	scar_pax_write_meta(&meta, &out.w);
+		if (scar_pax_write_entry(&meta, &ifile.r, &ofile.w) < 0) {
+			return 1;
+		}
+	}
+
+	if (scar_pax_write_end(&ofile.w) < 0) {
+		return 1;
+	}
+
+	close_file(&ifile);
+	close_file(&ofile);
 	scar_pax_meta_destroy(&meta);
+	scar_pax_meta_destroy(&global);
+	return 0;
+}
 
-	scar_pax_write_end(&out.w);
+int main(int argc, char **argv)
+{
+	if (argc < 2) {
+		usage(argv[0]);
+		return 1;
+	}
+
+	if (strcmp(argv[1], "convert") == 0) {
+		return do_convert(argv + 2);
+	} else {
+		usage(argv[0]);
+		return 1;
+	}
 }
