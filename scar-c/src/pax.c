@@ -109,6 +109,17 @@ static char *block_read_string(const unsigned char *block, struct scar_ustar_fie
 	return path;
 }
 
+static int block_is_zero(const unsigned char *block)
+{
+	for (size_t i = 0; i < 512; ++i) {
+		if (block[i]) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
 static char *block_read_path(const unsigned char *block, struct scar_ustar_field field)
 {
 	size_t pfx_len = block_field_strlen(block, SCAR_UST_PREFIX);
@@ -146,14 +157,29 @@ int scar_pax_read_meta(
 
 	scar_pax_meta_copy(meta, global);
 
-	// Read past any metadata style archive entries.
-	// Once this loop finishes, we'll have 'meta' and 'global' filled,
-	// and we'll be ready to read the next non-metadata entry's header block.
-	while (1) {
+	if (r->read(r, block, 512) < 512) {
+		SCAR_ERETURN(-1);
+	}
+
+	// End of archive is indicated by two all-zero blocks.
+	// If we get just one all-zero block, that's an error, since no valid archive entry
+	// starts with an all-zero block header.
+	if (block_is_zero(block)) {
 		if (r->read(r, block, 512) < 512) {
 			SCAR_ERETURN(-1);
 		}
 
+		if (block_is_zero(block)) {
+			return 0;
+		} else {
+			SCAR_ERETURN(-1);
+		}
+	}
+
+	// Read past any metadata style archive entries.
+	// Once this loop finishes, we'll have 'meta' and 'global' filled,
+	// and we'll be ready to read the next non-metadata entry's header block.
+	while (1) {
 		size = block_read_size(block, SCAR_UST_SIZE);
 		ftype = (char)block[SCAR_UST_TYPEFLAG.start];
 
@@ -207,6 +233,10 @@ int scar_pax_read_meta(
 		// That means we reached the header block for the actual file entry we're interested in.
 		else {
 			break;
+		}
+
+		if (r->read(r, block, 512) < 512) {
+			SCAR_ERETURN(-1);
 		}
 	}
 
