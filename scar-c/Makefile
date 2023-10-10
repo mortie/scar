@@ -1,6 +1,7 @@
 OUT ?= build
 
 LIBSCAR_SRCS := \
+	src/compression/gzip.c \
 	src/ioutil.c \
 	src/pax-meta.c \
 	src/pax-syntax.c \
@@ -8,10 +9,18 @@ LIBSCAR_SRCS := \
 #
 
 SCAR_TEST_SRCS := \
+	test/compression/gzip.t.c \
 	test/main.c \
 	test/pax-syntax.t.c \
 	test/pax-syntax.t.c \
 #
+
+SANITIZE ?=
+
+ifneq ($(SANITIZE),)
+	CFLAGS += -fsanitize=$(SANITIZE)
+	LDFLAGS += -fsanitize=$(SANITIZE)
+endif
 
 CFLAGS := $(CFLAGS) \
 	-Wall -Wextra -Wconversion -Wpedantic \
@@ -41,7 +50,7 @@ check-lldb: scar-test
 	lldb -o 'breakpoint set -n scar_breakpoint -C finish' -o 'run' ./scar-test
 
 libscar.so: $(patsubst %,$(OUT)/%.o,$(LIBSCAR_SRCS))
-	$(CC) -shared -o $@ $^ $(LDFLAGS) -lm
+	$(CC) -shared -o $@ $^ $(LDFLAGS) -lm -lz
 
 scar-test: $(patsubst %,$(OUT)/%.o,$(SCAR_TEST_SRCS)) libscar.so
 	$(CC) -o $@ $(filter %.o,$^) $(BIN_LDFLAGS)
@@ -62,7 +71,7 @@ $(OUT)/src/%.c.d: $(OUT)/src/%.c.o
 
 $(OUT)/test/%.c.o: test/%.c
 	@mkdir -p $(@D)
-	$(CC) -c -o $@ -MMD $(CFLAGS) -Iinclude/scar $<
+	$(CC) -c -o $@ -MMD $(CFLAGS) -Iinclude/scar -Itest  $<
 $(OUT)/test/%.c.d: $(OUT)/test/%.c.o
 
 $(OUT)/cmd/%.c.o: cmd/%.c

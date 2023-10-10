@@ -23,7 +23,7 @@ struct scar_io_writer {
 	scar_ssize (*write)(struct scar_io_writer *w, const void *buf, size_t len);
 };
 
-/// Abstroct seeker style type which allows seeking to a different place in a stream.
+/// Abstract seeker style type which allows seeking to a different place in a stream.
 struct scar_io_seeker {
 	/// Seek to 'offset' relative to the position given by 'whence'.
 	/// If 'whence' is SCAR_SEEK_START, 'offset' is relative to the start of the stream.

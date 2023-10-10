@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define TEST_GROUPS \
+	X(compression_gzip) \
 	X(pax_syntax) \
 //
 

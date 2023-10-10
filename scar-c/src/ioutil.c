@@ -177,7 +177,7 @@ void scar_mem_writer_init(struct scar_mem_writer *mw)
 scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len)
 {
 	struct scar_mem_writer *mw = SCAR_BASE(struct scar_mem_writer, w);
-	if (!mem_writer_grow(mw, len)) {
+	if (mem_writer_grow(mw, len) < 0) {
 		SCAR_ERETURN(-1);
 	}
 
