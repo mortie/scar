@@ -11,7 +11,6 @@ struct scar_compressor {
 
 struct scar_decompressor {
 	struct scar_io_reader r;
-	int (*flush)(struct scar_decompressor *d);
 };
 
 struct scar_compression {

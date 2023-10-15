@@ -15,6 +15,7 @@ TEST_GROUPS
 
 void scar_breakpoint(void)
 {
+	// This function only exists to work as a breakpoint in debuggers.
 }
 
 static size_t count_tests(struct scar_test_group tg)

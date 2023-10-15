@@ -24,7 +24,6 @@ static scar_ssize gzip_compressor_write(struct scar_io_writer *ptr, const void *
 	c->stream.next_in = (unsigned char *)buf;
 	c->stream.avail_in = (unsigned int)len;
 
-	size_t written = 0;
 	do {
 		c->stream.next_out = chunk;
 		c->stream.avail_out = sizeof(chunk);
@@ -39,13 +38,11 @@ static scar_ssize gzip_compressor_write(struct scar_io_writer *ptr, const void *
 		if (write_ret < 0) {
 			return -1;
 		} else if (write_ret < n) {
-			return (scar_ssize)written;
-		} else {
-			written += (unsigned int)len - c->stream.avail_in;
+			break;
 		}
 	} while (c->stream.avail_out == 0);
 
-	return (scar_ssize)written;
+	return (unsigned int)len - c->stream.avail_in;
 }
 
 static int gzip_compressor_do_flush(struct scar_compressor *ptr, int flush)
@@ -109,10 +106,67 @@ static void destroy_gzip_compressor(struct scar_compressor *ptr)
 	free(c);
 }
 
+struct gzip_decompressor {
+	struct scar_decompressor c;
+	struct scar_io_reader *r;
+	z_stream stream;
+};
+
+static scar_ssize gzip_decompressor_read(struct scar_io_reader *ptr, void *buf, size_t len)
+{
+	struct gzip_decompressor *d = (struct gzip_decompressor *)ptr;
+	unsigned char chunk[512];
+
+	d->stream.next_out = buf;
+	d->stream.avail_out = (unsigned int)len;
+
+	do {
+		if (d->stream.avail_in == 0) {
+			scar_ssize n = d->r->read(d->r, chunk, sizeof(chunk));
+			if (n < 0) {
+				return -1;
+			} else if (n == 0) {
+				break;
+			}
+
+			d->stream.next_in = chunk;
+			d->stream.avail_in = (unsigned int)n;
+		}
+
+		int ret = inflate(&d->stream, Z_SYNC_FLUSH);
+		if (ret < 0) {
+			return -1;
+		} else if (ret == Z_STREAM_END) {
+			break;
+		}
+	} while (d->stream.avail_out > 0);
+
+	return (scar_ssize)(len - d->stream.avail_out);
+}
+
+static struct scar_decompressor *create_gzip_decompressor(struct scar_io_reader *r)
+{
+	struct gzip_decompressor *c = malloc(sizeof(*c));
+	c->c.r.read = gzip_decompressor_read;
+	c->r = r;
+	inflateInit2(&c->stream, 15 | 16);
+
+	return &c->c;
+}
+
+static void destroy_gzip_decompressor(struct scar_decompressor *ptr)
+{
+	struct gzip_decompressor *c = (struct gzip_decompressor *)ptr;
+	deflateEnd(&c->stream);
+	free(c);
+}
+
 void scar_compression_init_gzip(struct scar_compression *c)
 {
 	c->create_compressor = create_gzip_compressor;
 	c->destroy_compressor = destroy_gzip_compressor;
+	c->create_decompressor = create_gzip_decompressor;
+	c->destroy_decompressor = destroy_gzip_decompressor;
 	c->magic = MAGIC;
 	c->magic_len = sizeof(MAGIC);
 	c->eof_marker = EOF_MARKER;

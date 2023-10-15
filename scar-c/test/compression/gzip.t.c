@@ -82,12 +82,12 @@ TEST(compress)
 	scar_mem_writer_init(&mw);
 
 	struct scar_compressor *compressor = gzip.create_compressor(&mw.w, 6);
-	ASSERT(compressor->w.write(&compressor->w, data, sizeof(data) - 1) == sizeof(data) - 1);
-	ASSERT(compressor->finish(compressor) == 0);
+	ASSERT2(compressor->w.write(&compressor->w, data, sizeof(data) - 1), ==, sizeof(data) - 1);
+	ASSERT2(compressor->finish(compressor), ==, 0);
 	gzip.destroy_compressor(compressor);
 
-	ASSERT(mw.len == sizeof(compressed_data));
-	ASSERT(memcmp(mw.buf, compressed_data, mw.len) == 0);
+	ASSERT2(mw.len, ==, sizeof(compressed_data));
+	ASSERT2(memcmp(mw.buf, compressed_data, mw.len), ==, 0);
 
 	OK();
 }
@@ -109,16 +109,71 @@ TEST(compress_chunked)
 	struct scar_compressor *compressor = gzip.create_compressor(&mw.w, 6);
 
 	for (int i = 0; i < 10; ++i) {
-		ASSERT(compressor->w.write(&compressor->w, "Hello World\n", 12) == 12);
+		ASSERT2(compressor->w.write(&compressor->w, "Hello World\n", 12), ==, 12);
 	}
 
-	ASSERT(compressor->finish(compressor) == 0);
+	ASSERT2(compressor->finish(compressor), ==, 0);
 	gzip.destroy_compressor(compressor);
 
-	ASSERT(mw.len == sizeof(compressed_data));
-	ASSERT(memcmp(mw.buf, compressed_data, mw.len) == 0);
+	ASSERT2(mw.len, ==, sizeof(compressed_data));
+	ASSERT2(memcmp(mw.buf, compressed_data, mw.len), ==, 0);
 
 	OK();
 }
 
-TESTGROUP(compression_gzip, compress, compress_chunked);
+TEST(decompress)
+{
+	char data[] = "Hello World\n";
+
+	unsigned char compressed_data[] = {
+		0x1f, 0x8b, 0x08, 0x00, 0x69, 0xd6, 0x28, 0x65, 0x00, 0x03, 0xf3, 0x48,
+		0xcd, 0xc9, 0xc9, 0x57, 0x08, 0xcf, 0x2f, 0xca, 0x49, 0xe1, 0x02, 0x00,
+		0xe3, 0xe5, 0x95, 0xb0, 0x0c, 0x00, 0x00, 0x00,
+	};
+
+	struct scar_compression gzip;
+	scar_compression_init_gzip(&gzip);
+
+	struct scar_mem_reader mr;
+	scar_mem_reader_init(&mr, compressed_data, sizeof(compressed_data));
+
+	struct scar_decompressor *decompressor = gzip.create_decompressor(&mr.r);
+
+	char decbuf[512];
+	scar_ssize r = decompressor->r.read(&decompressor->r, decbuf, sizeof(decbuf));
+	ASSERT2(r, ==, sizeof(data) - 1);
+	ASSERT2(memcmp(decbuf, data, sizeof(data) - 1), ==, 0);
+
+	gzip.destroy_decompressor(decompressor);
+
+	OK();
+}
+
+TEST(decompress_chunked)
+{
+	unsigned char compressed_data[] = {
+		0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xf3, 0x48,
+		0xcd, 0xc9, 0xc9, 0x57, 0x08, 0xcf, 0x2f, 0xca, 0x49, 0xe1, 0xf2, 0xa0,
+		0x23, 0x1b, 0x00, 0xc2, 0x7d, 0x35, 0x15, 0x78, 0x00, 0x00, 0x00,
+	};
+
+	struct scar_compression gzip;
+	scar_compression_init_gzip(&gzip);
+
+	struct scar_mem_reader mr;
+	scar_mem_reader_init(&mr, compressed_data, sizeof(compressed_data));
+
+	struct scar_decompressor *decompressor = gzip.create_decompressor(&mr.r);
+
+	char buf[12];
+	for (int i = 0; i < 10; ++i) {
+		ASSERT2(decompressor->r.read(&decompressor->r, buf, 12), ==, 12);
+		ASSERT2(memcmp(buf, "Hello World\n", 12), ==, 0);
+	}
+
+	gzip.destroy_decompressor(decompressor);
+
+	OK();
+}
+
+TESTGROUP(compression_gzip, compress, compress_chunked, decompress, decompress_chunked);
