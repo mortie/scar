@@ -4,6 +4,7 @@
 #include "test.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 TEST(compress)
 {
@@ -88,6 +89,7 @@ TEST(compress)
 
 	ASSERT2(mw.len, ==, sizeof(compressed_data));
 	ASSERT2(memcmp(mw.buf, compressed_data, mw.len), ==, 0);
+	free(mw.buf);
 
 	OK();
 }
@@ -117,6 +119,7 @@ TEST(compress_chunked)
 
 	ASSERT2(mw.len, ==, sizeof(compressed_data));
 	ASSERT2(memcmp(mw.buf, compressed_data, mw.len), ==, 0);
+	free(mw.buf);
 
 	OK();
 }

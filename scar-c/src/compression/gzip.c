@@ -158,9 +158,9 @@ static struct scar_decompressor *create_gzip_decompressor(struct scar_io_reader 
 
 static void destroy_gzip_decompressor(struct scar_decompressor *ptr)
 {
-	struct gzip_decompressor *c = (struct gzip_decompressor *)ptr;
-	deflateEnd(&c->stream);
-	free(c);
+	struct gzip_decompressor *d = (struct gzip_decompressor *)ptr;
+	inflateEnd(&d->stream);
+	free(d);
 }
 
 void scar_compression_init_gzip(struct scar_compression *c)
