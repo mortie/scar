@@ -89,6 +89,7 @@ static struct scar_compressor *create_gzip_compressor(struct scar_io_writer *w, 
 	c->c.flush = gzip_compressor_flush;
 	c->c.finish = gzip_compressor_finish;
 	c->w = w;
+	memset(&c->stream, 0, sizeof(c->stream));
 	deflateInit2(&c->stream, level, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY);
 
 	gz_header header;
@@ -107,7 +108,7 @@ static void destroy_gzip_compressor(struct scar_compressor *ptr)
 }
 
 struct gzip_decompressor {
-	struct scar_decompressor c;
+	struct scar_decompressor d;
 	struct scar_io_reader *r;
 	z_stream stream;
 };
@@ -146,12 +147,13 @@ static scar_ssize gzip_decompressor_read(struct scar_io_reader *ptr, void *buf, 
 
 static struct scar_decompressor *create_gzip_decompressor(struct scar_io_reader *r)
 {
-	struct gzip_decompressor *c = malloc(sizeof(*c));
-	c->c.r.read = gzip_decompressor_read;
-	c->r = r;
-	inflateInit2(&c->stream, 15 | 16);
+	struct gzip_decompressor *d = malloc(sizeof(*d));
+	d->d.r.read = gzip_decompressor_read;
+	d->r = r;
+	memset(&d->stream, 0, sizeof(d->stream));
+	inflateInit2(&d->stream, 15 | 16);
 
-	return &c->c;
+	return &d->d;
 }
 
 static void destroy_gzip_decompressor(struct scar_decompressor *ptr)

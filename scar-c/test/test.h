@@ -1,12 +1,9 @@
 #ifndef SCAR_TEST_H
 #define SCAR_TEST_H
 
-#if defined(__clang__)
+#if defined(__GNUC__)
 #define HAS_TYPEOF
 #define TYPEOF __typeof__
-#elif defined(__GNUC__)
-#define HAS_TYPEOF
-#define TYPEOF typeof
 #endif
 
 /// A test result, returned from functions declared with the 'TEST' macro.
