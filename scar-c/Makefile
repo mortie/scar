@@ -39,7 +39,7 @@ all: libscar.so scar scar-test pax-analyze tar-analyze
 .PHONY: clean
 clean:
 	rm -rf $(OUT)
-	rm -f libscar.so scar-test scar pax-analyze
+	rm -f libscar.so scar-test scar pax-analyze tar-analyze
 
 .PHONY: check
 check: scar-test
