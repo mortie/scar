@@ -200,7 +200,7 @@ void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len)
 
 void scar_counting_writer_init(struct scar_counting_writer *cw, struct scar_io_writer *w)
 {
-	cw->w.write = scar_mem_writer_write;
+	cw->w.write = scar_counting_writer_write;
 	cw->backing_w = w;
 	cw->written = 0;
 }

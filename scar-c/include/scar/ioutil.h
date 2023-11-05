@@ -64,6 +64,6 @@ struct scar_counting_writer {
 };
 
 void scar_counting_writer_init(struct scar_counting_writer *cw, struct scar_io_writer *w);
-scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
+scar_ssize scar_counting_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
 
 #endif

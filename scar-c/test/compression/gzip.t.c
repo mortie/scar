@@ -83,7 +83,9 @@ TEST(compress)
 	scar_mem_writer_init(&mw);
 
 	struct scar_compressor *compressor = gzip.create_compressor(&mw.w, 6);
-	ASSERT2(compressor->w.write(&compressor->w, data, sizeof(data) - 1), ==, sizeof(data) - 1);
+	ASSERT2(
+		compressor->w.write(&compressor->w, data, sizeof(data) - 1), ==,
+		(scar_ssize)sizeof(data) - 1);
 	ASSERT2(compressor->finish(compressor), ==, 0);
 	gzip.destroy_compressor(compressor);
 
@@ -144,7 +146,7 @@ TEST(decompress)
 
 	char decbuf[512];
 	scar_ssize r = decompressor->r.read(&decompressor->r, decbuf, sizeof(decbuf));
-	ASSERT2(r, ==, sizeof(data) - 1);
+	ASSERT2(r, ==, (scar_ssize)sizeof(data) - 1);
 	ASSERT2(memcmp(decbuf, data, sizeof(data) - 1), ==, 0);
 
 	gzip.destroy_decompressor(decompressor);
