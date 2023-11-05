@@ -11,6 +11,7 @@ LIBSCAR_SRCS := \
 
 SCAR_TEST_SRCS := \
 	test/compression/gzip.t.c \
+	test/ioutil.t.c \
 	test/main.c \
 	test/pax-syntax.t.c \
 	test/pax-syntax.t.c \
@@ -49,6 +50,10 @@ check: scar-test
 .PHONY: check-lldb
 check-lldb: scar-test
 	lldb -o 'breakpoint set -n scar_breakpoint -C finish' -o 'run' ./scar-test
+
+.PHONY: check-gdb
+check-gdb: scar-test
+	gdb -ex 'break scar_breakpoint' -ex 'command' -ex 'finish' -ex 'end' -ex 'run' ./scar-test
 
 libscar.so: $(patsubst %,$(OUT)/%.o,$(LIBSCAR_SRCS))
 	$(CC) -shared -o $@ $^ $(LDFLAGS) -lm -lz
