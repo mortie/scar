@@ -581,6 +581,10 @@ int scar_pax_write_entry(
 		return ret;
 	}
 
+	if (!~meta->size) {
+		return 0;
+	}
+
 	return scar_pax_write_content(r, w, meta->size);
 }
 

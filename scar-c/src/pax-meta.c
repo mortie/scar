@@ -87,11 +87,12 @@ void scar_pax_meta_init_empty(struct scar_pax_meta *meta)
 	meta->uname = NULL;
 }
 
-void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path)
+void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path, uint64_t size)
 {
 	scar_pax_meta_init_empty(meta);
 	meta->type = SCAR_FT_FILE;
 	meta->path = dupstr(path);
+	meta->size = size;
 }
 
 void scar_pax_meta_init_hardlink(struct scar_pax_meta *meta, char *path, char *linkpath)

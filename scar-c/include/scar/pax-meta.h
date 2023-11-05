@@ -56,7 +56,7 @@ struct scar_pax_meta {
 void scar_pax_meta_init_empty(struct scar_pax_meta *meta);
 
 /// Initialize a pax_meta struct which represents a regular file.
-void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path);
+void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path, uint64_t size);
 
 /// Initialize a pax_meta struct which represents a hardlink.
 void scar_pax_meta_init_hardlink(struct scar_pax_meta *meta, char *path, char *linkpath);
