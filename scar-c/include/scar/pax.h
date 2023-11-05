@@ -14,7 +14,7 @@
 /// The reader 'r' is expected to be positioned right at the start of an archive entry.
 /// Returns 1 on success, 0 if the end-of-archive indicator was reached, -1 on error.
 int scar_pax_read_meta(
-		struct scar_pax_meta *global, struct scar_pax_meta *meta, struct scar_io_reader *r);
+	struct scar_pax_meta *global, struct scar_pax_meta *meta, struct scar_io_reader *r);
 
 /// Read the contents of an archive entry.
 /// This will basically copy up to 'size' bytes from 'r' to 'w',
@@ -37,7 +37,7 @@ int scar_pax_write_content(struct scar_io_reader *r, struct scar_io_writer *w, u
 /// Write a header + content.
 /// Utility function to combine scar_pax_write_meta and scar_pax_write_content.
 int scar_pax_write_entry(
-		struct scar_pax_meta *meta, struct scar_io_reader *r, struct scar_io_writer *w);
+	struct scar_pax_meta *meta, struct scar_io_reader *r, struct scar_io_writer *w);
 
 /// Write the end-of-archive indicator.
 /// That basically means writing 1024 0-bytes to 'w'.

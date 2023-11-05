@@ -24,7 +24,7 @@ struct scar_writer {
 };
 
 struct scar_writer *scar_writer_create(
-		struct scar_io_writer *w, struct scar_compression *comp, int clevel)
+	struct scar_io_writer *w, struct scar_compression *comp, int clevel)
 {
 	struct scar_writer *sw = malloc(sizeof(*sw));
 	if (!sw) {
@@ -98,7 +98,7 @@ static int create_checkpoint(struct scar_writer *sw)
 }
 
 int scar_writer_write_entry(
-		struct scar_writer *sw, struct scar_pax_meta *meta, struct scar_io_reader *r)
+	struct scar_writer *sw, struct scar_pax_meta *meta, struct scar_io_reader *r)
 {
 	scar_ssize ret;
 
