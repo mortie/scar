@@ -35,12 +35,12 @@ BIN_LDFLAGS += -Wl,-rpath='$$ORIGIN'
 endif
 
 .PHONY: all
-all: libscar.so scar scar-test pax-analyze tar-analyze
+all: libscar.so scar scar-test scar-test-writer pax-analyze tar-analyze
 
 .PHONY: clean
 clean:
 	rm -rf $(OUT)
-	rm -f libscar.so scar-test scar pax-analyze tar-analyze
+	rm -f libscar.so scar-test scar pax-analyze tar-analyze scar-write
 
 .PHONY: check
 check: scar-test
@@ -55,6 +55,9 @@ libscar.so: $(patsubst %,$(OUT)/%.o,$(LIBSCAR_SRCS))
 
 scar-test: $(patsubst %,$(OUT)/%.o,$(SCAR_TEST_SRCS)) libscar.so
 	$(CC) -o $@ $(filter %.o,$^) $(BIN_LDFLAGS)
+
+scar-test-writer: $(OUT)/cmd/scar-test-writer.c.o libscar.so
+	$(CC) -o $@ $< $(BIN_LDFLAGS)
 
 scar: $(OUT)/cmd/scar.c.o libscar.so
 	$(CC) -o $@ $< $(BIN_LDFLAGS)
