@@ -2,6 +2,7 @@
 #define SCAR_IOUTIL_H
 
 #include "io.h"
+#include "types.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -54,5 +55,15 @@ struct scar_mem_writer {
 void scar_mem_writer_init(struct scar_mem_writer *mw);
 scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
 void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len);
+
+/// A writer wrapper which counts the number of bytes written.
+struct scar_counting_writer {
+	struct scar_io_writer w;
+	struct scar_io_writer *backing_w;
+	scar_offset written;
+};
+
+void scar_counting_writer_init(struct scar_counting_writer *cw, struct scar_io_writer *w);
+scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
 
 #endif

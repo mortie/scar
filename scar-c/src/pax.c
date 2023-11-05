@@ -4,6 +4,7 @@
 #include "ioutil.h"
 #include "pax-syntax.h"
 #include "ustar.h"
+#include "internal-util.h"
 
 #include <stdlib.h>
 #include <inttypes.h>
@@ -327,17 +328,6 @@ static void block_write_chksum(unsigned char *block)
 	}
 
 	block_write_u64(block, SCAR_UST_CHKSUM, sum);
-}
-
-static size_t log10_ceil(size_t num)
-{
-	size_t lg = 0;
-	while (num > 0) {
-		lg += 1;
-		num /= 10;
-	}
-
-	return lg;
 }
 
 static int pax_write_field(struct scar_mem_writer *mw, char *name, void *buf, size_t len)

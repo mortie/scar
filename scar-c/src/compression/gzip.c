@@ -1,5 +1,7 @@
 #include "compression.h"
 
+#include "../internal-util.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
@@ -85,12 +87,19 @@ static int gzip_compressor_finish(struct scar_compressor *ptr)
 static struct scar_compressor *create_gzip_compressor(struct scar_io_writer *w, int level)
 {
 	struct gzip_compressor *c = malloc(sizeof(*c));
+	if (!c) {
+		return NULL;
+	}
+
 	c->c.w.write = gzip_compressor_write;
 	c->c.flush = gzip_compressor_flush;
 	c->c.finish = gzip_compressor_finish;
 	c->w = w;
 	memset(&c->stream, 0, sizeof(c->stream));
-	deflateInit2(&c->stream, level, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY);
+	if (deflateInit2(&c->stream, level, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY) < 0) {
+		free(c);
+		return NULL;
+	}
 
 	gz_header header;
 	memset(&header, 0, sizeof(header));
@@ -148,10 +157,17 @@ static scar_ssize gzip_decompressor_read(struct scar_io_reader *ptr, void *buf, 
 static struct scar_decompressor *create_gzip_decompressor(struct scar_io_reader *r)
 {
 	struct gzip_decompressor *d = malloc(sizeof(*d));
+	if (!d) {
+		SCAR_ERETURN(NULL);
+	}
+
 	d->d.r.read = gzip_decompressor_read;
 	d->r = r;
 	memset(&d->stream, 0, sizeof(d->stream));
-	inflateInit2(&d->stream, 15 | 16);
+	if (inflateInit2(&d->stream, 15 | 16) < 0) {
+		free(d);
+		SCAR_ERETURN(NULL);
+	}
 
 	return &d->d;
 }

@@ -1,6 +1,6 @@
 #include "pax-syntax.h"
 
-#include "util.h"
+#include "internal-util.h"
 
 #include <stdio.h>
 #include <string.h>

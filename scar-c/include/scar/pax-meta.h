@@ -79,11 +79,11 @@ void scar_pax_meta_init_fifo(struct scar_pax_meta *meta, char *path);
 /// Copy a scar_pax_meta to 'dest' from 'src'.
 void scar_pax_meta_copy(struct scar_pax_meta *dest, struct scar_pax_meta *src);
 
+/// Pretty-print a metadata struct, for debugging purposes.
+void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w);
+
 /// Free up every allocated string in a pax_meta struct.
 /// The struct can be re-used after another call to scar_pax_meta_init.
 void scar_pax_meta_destroy(struct scar_pax_meta *meta);
-
-/// Pretty-print a metadata struct, for debugging purposes.
-void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w);
 
 #endif

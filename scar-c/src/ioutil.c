@@ -1,6 +1,7 @@
 #include "ioutil.h"
 
 #include "util.h"
+#include "internal-util.h"
 
 #include <signal.h>
 #include <stdlib.h>
@@ -195,4 +196,22 @@ void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len)
 	void *buf = &((unsigned char *)mw->buf)[mw->len];
 	mw->len += len;
 	return buf;
+}
+
+void scar_counting_writer_init(struct scar_counting_writer *cw, struct scar_io_writer *w)
+{
+	cw->w.write = scar_mem_writer_write;
+	cw->backing_w = w;
+	cw->written = 0;
+}
+
+scar_ssize scar_counting_writer_write(struct scar_io_writer *w, const void *buf, size_t len)
+{
+	struct scar_counting_writer *cw = SCAR_BASE(struct scar_counting_writer, w);
+	scar_ssize written = cw->backing_w->write(cw->backing_w, buf, len);
+	if (written > 0) {
+		cw->written += written;
+	}
+
+	return written;
 }

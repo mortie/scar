@@ -154,17 +154,6 @@ void scar_pax_meta_copy(struct scar_pax_meta *dest, struct scar_pax_meta *src)
 	dest->uname = dupstr(src->uname);
 }
 
-void scar_pax_meta_destroy(struct scar_pax_meta *meta)
-{
-	free(meta->charset);
-	free(meta->comment);
-	free(meta->gname);
-	free(meta->hdrcharset);
-	free(meta->linkpath);
-	free(meta->path);
-	free(meta->uname);
-}
-
 void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w)
 {
 	scar_io_printf(w, "Metadata{\n");
@@ -189,4 +178,15 @@ void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	if (meta->uname) scar_io_printf(w, "\tuname: %s\n", meta->uname);
 
 	scar_io_printf(w, "}\n");
+}
+
+void scar_pax_meta_destroy(struct scar_pax_meta *meta)
+{
+	free(meta->charset);
+	free(meta->comment);
+	free(meta->gname);
+	free(meta->hdrcharset);
+	free(meta->linkpath);
+	free(meta->path);
+	free(meta->uname);
 }
