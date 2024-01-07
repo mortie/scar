@@ -3,7 +3,6 @@
 #include "io.h"
 #include "test.h"
 
-#include <string.h>
 #include <stdlib.h>
 
 TEST(mem_reader_read)

@@ -53,7 +53,7 @@ check-lldb: scar-test
 
 .PHONY: check-gdb
 check-gdb: scar-test
-	gdb -ex 'break scar_breakpoint' -ex 'command' -ex 'finish' -ex 'end' -ex 'run' ./scar-test
+	gdb -ex 'break scar_breakpoint' -ex 'run' ./scar-test
 
 libscar.so: $(patsubst %,$(OUT)/%.o,$(LIBSCAR_SRCS))
 	$(CC) -shared -o $@ $^ $(LDFLAGS) -lm -lz
