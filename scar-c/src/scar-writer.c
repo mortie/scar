@@ -1,7 +1,6 @@
 #include "scar-writer.h"
 
 #include "ioutil.h"
-#include "util.h"
 #include "internal-util.h"
 #include "pax.h"
 
@@ -171,12 +170,12 @@ int scar_writer_finish(struct scar_writer *sw)
 	// so we'll just directly use the backing writer for the compressed stream from now on
 	struct scar_io_writer *w = sw->compressed_writer.backing_w;
 
-	ret = sw->compressed_writer.w.write(w, sw->index_buf.buf, sw->index_buf.len);
+	ret = w->write(w, sw->index_buf.buf, sw->index_buf.len);
 	if (ret < (scar_offset)sw->index_buf.len) {
 		SCAR_ERETURN(-1);
 	}
 
-	ret = sw->compressed_writer.w.write(w, sw->checkpoints_buf.buf, sw->checkpoints_buf.len);
+	ret = w->write(w, sw->checkpoints_buf.buf, sw->checkpoints_buf.len);
 	if (ret < (scar_offset)sw->checkpoints_buf.len) {
 		SCAR_ERETURN(-1);
 	}

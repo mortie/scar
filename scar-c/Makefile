@@ -6,6 +6,7 @@ LIBSCAR_SRCS := \
 	src/pax-meta.c \
 	src/pax-syntax.c \
 	src/pax.c \
+	src/scar-reader.c \
 	src/scar-writer.c \
 #
 
