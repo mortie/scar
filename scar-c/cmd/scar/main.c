@@ -4,8 +4,7 @@
 #include <scar/scar-reader.h>
 #include <string.h>
 
-#include "scar-cmd/util.h"
-#include "scar-cmd/subcommands.h"
+#include "subcommands.h"
 
 static void usage(char *argv0)
 {
