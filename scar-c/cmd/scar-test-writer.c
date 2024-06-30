@@ -5,8 +5,8 @@
 
 int main(void)
 {
-	struct scar_file out;
-	scar_file_init(&out, stdout);
+	struct scar_file_handle out;
+	scar_file_handle_init(&out, stdout);
 
 	struct scar_compression comp;
 	scar_compression_init_gzip(&comp);

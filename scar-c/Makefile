@@ -16,16 +16,16 @@ $(OUT)/build.ninja:
 $(OUT)/scar: $(OUT)/build.ninja
 	$(NINJA) -C $(OUT) $(NINJA_FLAGS) scar
 
-.PHONY: $(OUT)/scar_test
-$(OUT)/scar_test: $(OUT)/build.ninja
-	$(NINJA) -C $(OUT) $(NINJA_FLAGS) scar_test
+.PHONY: $(OUT)/test-scar
+$(OUT)/test-scar: $(OUT)/build.ninja
+	$(NINJA) -C $(OUT) $(NINJA_FLAGS) test-scar
 
 .PHONY: setup
 setup: $(OUT)/build.ninja
 
 .PHONY: check
-check: $(OUT)/scar_test
-	$(OUT)/scar_test
+check: $(OUT)/test-scar
+	$(OUT)/test-scar
 
 .PHONY: check-lldb
 check-lldb: $(OUT)/scar-test

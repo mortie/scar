@@ -29,13 +29,37 @@ libscar_dep = declare_dependency(
 
 executable(
   'scar',
+  'cmd/scar-cmd/convert.c',
+  'cmd/scar-cmd/list.c',
+  'cmd/scar-cmd/util.c',
   'cmd/scar.c',
   dependencies: libscar_dep,
   install: true,
 )
 
 executable(
-  'scar_test',
+  'pax-analyze',
+  'cmd/pax-analyze.c',
+  dependencies: libscar_dep,
+  install: false,
+)
+
+executable(
+  'scar-test-writer',
+  'cmd/scar-test-writer.c',
+  dependencies: libscar_dep,
+  install: false,
+)
+
+executable(
+  'tar-analyze',
+  'cmd/tar-analyze.c',
+  dependencies: libscar_dep,
+  install: false,
+)
+
+executable(
+  'test-scar',
   'test/main.c',
   'test/compression/gzip.t.c',
   'test/ioutil.t.c',

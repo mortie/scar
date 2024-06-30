@@ -22,8 +22,8 @@ static uint64_t read_u64(const unsigned char *block, struct scar_ustar_field fie
 
 int main(void)
 {
-	struct scar_file in;
-	scar_file_init(&in, stdin);
+	struct scar_file_handle in;
+	scar_file_handle_init(&in, stdin);
 
 	unsigned char block[512];
 

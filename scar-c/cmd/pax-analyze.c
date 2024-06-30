@@ -4,11 +4,11 @@
 
 int main(void)
 {
-	struct scar_file in;
-	scar_file_init(&in, stdin);
+	struct scar_file_handle in;
+	scar_file_handle_init(&in, stdin);
 
-	struct scar_file out;
-	scar_file_init(&out, stdout);
+	struct scar_file_handle out;
+	scar_file_handle_init(&out, stdout);
 
 	struct scar_pax_meta global;
 	scar_pax_meta_init_empty(&global);

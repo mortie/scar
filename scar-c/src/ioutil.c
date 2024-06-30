@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * Utility functions
+ */
+
 scar_ssize scar_io_printf(struct scar_io_writer *w, const char *fmt, ...)
 {
 	va_list ap;
@@ -34,18 +38,22 @@ scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap
 	return ret;
 }
 
-void scar_file_init(struct scar_file *r, FILE *f)
+//
+// scar_file_handle
+//
+
+void scar_file_handle_init(struct scar_file_handle *r, FILE *f)
 {
-	r->r.read = scar_file_read;
-	r->w.write = scar_file_write;
-	r->s.seek = scar_file_seek;
-	r->s.tell = scar_file_tell;
+	r->r.read = scar_file_handle_read;
+	r->w.write = scar_file_handle_write;
+	r->s.seek = scar_file_handle_seek;
+	r->s.tell = scar_file_handle_tell;
 	r->f = f;
 }
 
-scar_ssize scar_file_read(struct scar_io_reader *r, void *buf, size_t len)
+scar_ssize scar_file_handle_read(struct scar_io_reader *r, void *buf, size_t len)
 {
-	struct scar_file *sf = SCAR_BASE(struct scar_file, r);
+	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, r);
 	size_t n = fread(buf, 1, len, sf->f);
 	if (n == 0 && ferror(sf->f)) {
 		SCAR_ERETURN(-1);
@@ -54,9 +62,9 @@ scar_ssize scar_file_read(struct scar_io_reader *r, void *buf, size_t len)
 	return (scar_ssize)n;
 }
 
-scar_ssize scar_file_write(struct scar_io_writer *w, const void *buf, size_t len)
+scar_ssize scar_file_handle_write(struct scar_io_writer *w, const void *buf, size_t len)
 {
-	struct scar_file *sf = SCAR_BASE(struct scar_file, w);
+	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, w);
 	size_t n = fwrite(buf, 1, len, sf->f);
 	if (n == 0 && ferror(sf->f)) {
 		SCAR_ERETURN(-1);
@@ -71,19 +79,23 @@ static const int whences[] = {
 	[SCAR_SEEK_END] = SEEK_END,
 };
 
-int scar_file_seek(struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence)
+int scar_file_handle_seek(struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence)
 {
-	struct scar_file *sf = SCAR_BASE(struct scar_file, s);
+	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, s);
 	// TODO: Select fseek64 or fseeko based on platform
 	return fseek(sf->f, (long)offset, whences[whence]);
 }
 
-scar_offset scar_file_tell(struct scar_io_seeker *s)
+scar_offset scar_file_handle_tell(struct scar_io_seeker *s)
 {
-	struct scar_file *sf = SCAR_BASE(struct scar_file, s);
+	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, s);
 	// TODO: Select ftell64 or ftello based on platform
 	return ftell(sf->f);
 }
+
+//
+// scar_mem_reader
+//
 
 void scar_mem_reader_init(struct scar_mem_reader *mr, const void *buf, size_t len)
 {
@@ -145,6 +157,10 @@ scar_offset scar_mem_reader_tell(struct scar_io_seeker *s)
 	return (scar_offset)mr->pos;
 }
 
+//
+// scar_mem_writer
+//
+
 static int mem_writer_grow(struct scar_mem_writer *mw, size_t len)
 {
 	if (mw->cap < mw->len + len) {
@@ -198,6 +214,10 @@ void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len)
 	mw->len += len;
 	return buf;
 }
+
+//
+// scar_counting_writer
+//
 
 void scar_counting_writer_init(
 	struct scar_counting_writer *cw, struct scar_io_writer *w

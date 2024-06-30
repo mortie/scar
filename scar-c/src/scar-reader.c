@@ -175,3 +175,9 @@ struct scar_reader *scar_reader_create(
 	sr->raw_s = s;
 	return sr;
 }
+
+void scar_reader_free(struct scar_reader *sr)
+{
+	sr->comp.destroy_decompressor(sr->tail_decompressor);
+	free(sr);
+}
