@@ -28,4 +28,6 @@ struct scar_compression {
 
 void scar_compression_init_gzip(struct scar_compression *comp);
 
+int scar_compression_init_from_name(const char *name, struct scar_compression *comp);
+
 #endif

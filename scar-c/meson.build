@@ -9,6 +9,7 @@ endif
 
 libscar = library(
   'scar',
+  'src/compression/common.c',
   'src/compression/gzip.c',
   'src/ioutil.c',
   'src/pax-meta.c',

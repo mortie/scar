@@ -173,11 +173,18 @@ struct scar_reader *scar_reader_create(
 
 	sr->raw_r = r;
 	sr->raw_s = s;
+
+	sr->tail_decompressor = NULL;
+	sr->index_offset = 0;
+	sr->checkpoints_offset = 0;
+
 	return sr;
 }
 
 void scar_reader_free(struct scar_reader *sr)
 {
-	sr->comp.destroy_decompressor(sr->tail_decompressor);
+	if (sr->tail_decompressor) {
+		sr->comp.destroy_decompressor(sr->tail_decompressor);
+	}
 	free(sr);
 }

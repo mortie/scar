@@ -364,7 +364,7 @@ static int pax_write_field(
 		SCAR_ERETURN(-1);
 	}
 
-	destbuf += sprintf(destbuf, "%zu", fieldsize);
+	destbuf += snprintf(destbuf, fieldsize, "%zu", fieldsize);
 	*(destbuf++) = ' ';
 	memcpy(destbuf, name, namelen);
 	destbuf += namelen;

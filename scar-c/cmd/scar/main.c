@@ -20,9 +20,9 @@ int main(int argc, char **argv)
 	}
 
 	if (strcmp(argv[1], "convert") == 0) {
-		return cmd_convert(argv + 2);
+		return cmd_convert(argv + 1, argc - 1);
 	} else if (strcmp(argv[1], "list") == 0) {
-		return cmd_list(argv + 2);
+		return cmd_list(argv + 1, argc - 1);
 	} else {
 		usage(argv[0]);
 		return 1;
