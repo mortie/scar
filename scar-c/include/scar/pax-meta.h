@@ -56,22 +56,27 @@ struct scar_pax_meta {
 void scar_pax_meta_init_empty(struct scar_pax_meta *meta);
 
 /// Initialize a pax_meta struct which represents a regular file.
-void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path, uint64_t size);
+void scar_pax_meta_init_file(
+	struct scar_pax_meta *meta, char *path, uint64_t size);
 
 /// Initialize a pax_meta struct which represents a hardlink.
-void scar_pax_meta_init_hardlink(struct scar_pax_meta *meta, char *path, char *linkpath);
+void scar_pax_meta_init_hardlink(
+	struct scar_pax_meta *meta, char *path, char *linkpath);
 
 /// Initialize a pax_meta struct which represents a symlink.
-void scar_pax_meta_init_symlink(struct scar_pax_meta *meta, char *path, char *linkpath);
+void scar_pax_meta_init_symlink(
+	struct scar_pax_meta *meta, char *path, char *linkpath);
 
 /// Initialize a pax_meta struct which represents a directory.
 void scar_pax_meta_init_directory(struct scar_pax_meta *meta, char *path);
 
 /// Initialize a pax_meta struct which represents a chardev.
-void scar_pax_meta_init_chardev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min);
+void scar_pax_meta_init_chardev(
+	struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min);
 
 /// Initialize a pax_meta struct which represents a blockdev.
-void scar_pax_meta_init_blockdev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min);
+void scar_pax_meta_init_blockdev(
+	struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min);
 
 /// Initialize a pax_meta struct which represents a fifo.
 void scar_pax_meta_init_fifo(struct scar_pax_meta *meta, char *path);

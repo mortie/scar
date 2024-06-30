@@ -58,7 +58,8 @@ struct scar_writer *scar_writer_create(
 	}
 
 	scar_mem_writer_init(&sw->checkpoints_buf);
-	sw->checkpoints_compressor = sw->comp->create_compressor(&sw->checkpoints_buf.w, clevel);
+	sw->checkpoints_compressor = sw->comp->create_compressor(
+		&sw->checkpoints_buf.w, clevel);
 	if (!sw->checkpoints_compressor) {
 		comp->destroy_compressor(sw->compressor);
 		comp->destroy_compressor(sw->index_compressor);
@@ -88,7 +89,8 @@ static int create_checkpoint(struct scar_writer *sw)
 	sw->last_checkpoint_uncompressed_offset = uncompressed_offset;
 
 	scar_ssize ret = scar_io_printf(
-		&sw->checkpoints_compressor->w, "%lld %lld\n", compressed_offset, uncompressed_offset);
+		&sw->checkpoints_compressor->w, "%lld %lld\n",
+		compressed_offset, uncompressed_offset);
 	if (ret < 0) {
 		SCAR_ERETURN(-1);
 	}
@@ -102,7 +104,10 @@ int scar_writer_write_entry(
 	scar_ssize ret;
 
 	const int limit = 10 * 1024 * 1024;
-	if (sw->uncompressed_writer.written > sw->last_checkpoint_uncompressed_offset + limit) {
+	if (
+		sw->uncompressed_writer.written >
+		sw->last_checkpoint_uncompressed_offset + limit
+	) {
 		ret = create_checkpoint(sw);
 		if (ret < 0) {
 			SCAR_ERETURN(-1);
@@ -132,7 +137,8 @@ int scar_writer_write_entry(
 		SCAR_ERETURN(-1);
 	}
 
-	ret = sw->index_compressor->w.write(&sw->index_compressor->w, entry_buf.buf, entry_buf.len);
+	ret = sw->index_compressor->w.write(
+		&sw->index_compressor->w, entry_buf.buf, entry_buf.len);
 	if (ret < (scar_ssize)entry_buf.len) {
 		free(entry_buf.buf);
 		SCAR_ERETURN(-1);

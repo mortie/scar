@@ -39,8 +39,9 @@ static int read_bytes_block_aligned(void *buf, size_t size, struct scar_io_reade
 	return 0;
 }
 
-static int read_pax_block_aligned(struct scar_pax_meta *meta, size_t size, struct scar_io_reader *r)
-{
+static int read_pax_block_aligned(
+	struct scar_pax_meta *meta, size_t size, struct scar_io_reader *r
+) {
 	unsigned char block[512];
 
 	int leftover = 512 - (size % 512);
@@ -57,14 +58,17 @@ static int read_pax_block_aligned(struct scar_pax_meta *meta, size_t size, struc
 	return 0;
 }
 
-static size_t block_field_strlen(const unsigned char *block, struct scar_ustar_field field) {
+static size_t block_field_strlen(
+	const unsigned char *block, struct scar_ustar_field field
+) {
 	size_t len;
 	for (len = 0; len < field.length && block[field.start + len]; ++len);
 	return len;
 }
 
-static uint64_t block_read_u64(const unsigned char *block, struct scar_ustar_field field)
-{
+static uint64_t block_read_u64(
+	const unsigned char *block, struct scar_ustar_field field
+) {
 	const unsigned char *text = &block[field.start];
 	uint64_t num = 0;
 	for (size_t i = 0; i < field.length; ++i) {
@@ -80,13 +84,15 @@ static uint64_t block_read_u64(const unsigned char *block, struct scar_ustar_fie
 	return num;
 }
 
-static uint32_t block_read_u32(const unsigned char *block, struct scar_ustar_field field)
-{
+static uint32_t block_read_u32(
+	const unsigned char *block, struct scar_ustar_field field
+) {
 	return (uint32_t)block_read_u64(block, field);
 }
 
-static uint64_t block_read_size(const unsigned char *block, struct scar_ustar_field field)
-{
+static uint64_t block_read_size(
+	const unsigned char *block, struct scar_ustar_field field
+) {
 	const unsigned char *text = &block[field.start];
 	if (text[0] < 128) {
 		return block_read_u64(block, field);
@@ -101,8 +107,9 @@ static uint64_t block_read_size(const unsigned char *block, struct scar_ustar_fi
 	return num;
 }
 
-static char *block_read_string(const unsigned char *block, struct scar_ustar_field field)
-{
+static char *block_read_string(
+	const unsigned char *block, struct scar_ustar_field field
+) {
 	size_t len = block_field_strlen(block, field);
 	char *path = malloc(len + 1);
 	memcpy(path, &block[field.start], len);
@@ -121,8 +128,9 @@ static int block_is_zero(const unsigned char *block)
 	return 1;
 }
 
-static char *block_read_path(const unsigned char *block, struct scar_ustar_field field)
-{
+static char *block_read_path(
+	const unsigned char *block, struct scar_ustar_field field
+) {
 	size_t pfx_len = block_field_strlen(block, SCAR_UST_PREFIX);
 	size_t field_len = block_field_strlen(block, field);
 
@@ -150,8 +158,9 @@ static char *block_read_path(const unsigned char *block, struct scar_ustar_field
 }
 
 int scar_pax_read_meta(
-	struct scar_pax_meta *global, struct scar_pax_meta *meta, struct scar_io_reader *r)
-{
+	struct scar_pax_meta *global, struct scar_pax_meta *meta,
+	struct scar_io_reader *r
+) {
 	unsigned char block[512];
 	char ftype;
 	uint64_t size;
@@ -163,8 +172,8 @@ int scar_pax_read_meta(
 	}
 
 	// End of archive is indicated by two all-zero blocks.
-	// If we get just one all-zero block, that's an error, since no valid archive entry
-	// starts with an all-zero block header.
+	// If we get just one all-zero block, that's an error, since no valid
+	// archive entry starts with an all-zero block header.
 	if (block_is_zero(block)) {
 		if (r->read(r, block, 512) < 512) {
 			SCAR_ERETURN(-1);
@@ -231,7 +240,8 @@ int scar_pax_read_meta(
 		}
 
 		// Anything else should be a valid scar_pax_filetype.
-		// That means we reached the header block for the actual file entry we're interested in.
+		// That means we reached the header block for the actual file entry we're
+		// interested in.
 		else {
 			break;
 		}
@@ -261,8 +271,9 @@ int scar_pax_read_meta(
 	return 1;
 }
 
-int scar_pax_read_content(struct scar_io_reader *r, struct scar_io_writer *w, uint64_t size)
-{
+int scar_pax_read_content(
+	struct scar_io_reader *r, struct scar_io_writer *w, uint64_t size
+) {
 	unsigned char block[512];
 
 	while (size > 512) {
@@ -292,26 +303,33 @@ int scar_pax_read_content(struct scar_io_reader *r, struct scar_io_writer *w, ui
 	return 0;
 }
 
-static void block_write_u64(unsigned char *block, struct scar_ustar_field field, uint64_t num)
-{
+static void block_write_u64(
+	unsigned char *block, struct scar_ustar_field field, uint64_t num
+) {
 	if (!~num) {
 		num = 0;
 	}
 
-	snprintf((char *)&block[field.start], field.length, "%0*" PRIo64, (int)field.length - 1, num);
+	snprintf(
+		(char *)&block[field.start], field.length, "%0*" PRIo64,
+		(int)field.length - 1, num);
 }
 
-static void block_write_u32(unsigned char *block, struct scar_ustar_field field, uint32_t num)
-{
+static void block_write_u32(
+	unsigned char *block, struct scar_ustar_field field, uint32_t num
+) {
 	if (!~num) {
 		num = 0;
 	}
 
-	snprintf((char *)&block[field.start], field.length, "%0*" PRIo32, (int)field.length - 1, num);
+	snprintf(
+		(char *)&block[field.start], field.length, "%0*" PRIo32,
+		(int)field.length - 1, num);
 }
 
-static void block_write_string(unsigned char *block, struct scar_ustar_field field, char *str)
-{
+static void block_write_string(
+	unsigned char *block, struct scar_ustar_field field, char *str
+) {
 	if (str == NULL) {
 		str = "";
 	}
@@ -330,8 +348,9 @@ static void block_write_chksum(unsigned char *block)
 	block_write_u64(block, SCAR_UST_CHKSUM, sum);
 }
 
-static int pax_write_field(struct scar_mem_writer *mw, char *name, void *buf, size_t len)
-{
+static int pax_write_field(
+	struct scar_mem_writer *mw, char *name, void *buf, size_t len
+) {
 	size_t namelen = strlen(name);
 	size_t fieldsize = 1 + namelen + 1 + len + 1;
 	size_t fieldsizelen = log10_ceil(fieldsize);
@@ -470,7 +489,10 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	}
 
 	if (!isnan(meta->mtime) && (
-			meta->mtime < 0 || meta->mtime > 0777777777777ll || meta->mtime != floor(meta->mtime))) {
+		meta->mtime < 0 ||
+		meta->mtime > 0777777777777ll ||
+		meta->mtime != floor(meta->mtime))
+	) {
 		if (pax_write_time(&paxhdr, "mtime", meta->mtime) < 0) SCAR_ERETURN(-1);
 	}
 
@@ -540,8 +562,9 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	return 0;
 }
 
-int scar_pax_write_content(struct scar_io_reader *r, struct scar_io_writer *w, uint64_t size)
-{
+int scar_pax_write_content(
+	struct scar_io_reader *r, struct scar_io_writer *w, uint64_t size
+) {
 	unsigned char block[512];
 
 	while (size >= 512) {
@@ -574,7 +597,8 @@ int scar_pax_write_content(struct scar_io_reader *r, struct scar_io_writer *w, u
 }
 
 int scar_pax_write_entry(
-		struct scar_pax_meta *meta, struct scar_io_reader *r, struct scar_io_writer *w)
+		struct scar_pax_meta *meta, struct scar_io_reader *r,
+	struct scar_io_writer *w)
 {
 	int ret = scar_pax_write_meta(meta, w);
 	if (ret < 0) {

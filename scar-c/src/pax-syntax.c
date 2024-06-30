@@ -18,8 +18,9 @@ struct block_reader {
 	unsigned char block[512];
 };
 
-static void block_reader_init(struct block_reader *br, struct scar_io_reader *r, uint64_t size)
-{
+static void block_reader_init(
+	struct block_reader *br, struct scar_io_reader *r, uint64_t size
+) {
 	br->r = r;
 	br->index = 0;
 	br->bufcap = 0;
@@ -293,8 +294,9 @@ static int parse_one(struct scar_pax_meta *meta, struct block_reader *br) {
 	return 0;
 }
 
-int scar_pax_parse(struct scar_pax_meta *meta, struct scar_io_reader *r, uint64_t size)
-{
+int scar_pax_parse(
+	struct scar_pax_meta *meta, struct scar_io_reader *r, uint64_t size
+) {
 	struct block_reader br;
 	block_reader_init(&br, r, size);
 

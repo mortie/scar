@@ -9,8 +9,9 @@
 
 static const unsigned char MAGIC[] = {0x1f, 0x8b};
 static const unsigned char EOF_MARKER[] = {
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x0b, 0x76, 0x76, 0x0c, 0xd2, 0x75,
-	0xf5, 0x77, 0xe3, 0x02, 0x00, 0xf8, 0xf3, 0x55, 0x01, 0x09, 0x00, 0x00, 0x00,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x0b, 0x76, 0x76,
+	0x0c, 0xd2, 0x75, 0xf5, 0x77, 0xe3, 0x02, 0x00, 0xf8, 0xf3, 0x55, 0x01, 0x09,
+	0x00, 0x00, 0x00,
 };
 
 struct gzip_compressor {
@@ -20,8 +21,9 @@ struct gzip_compressor {
 	gz_header header;
 };
 
-static scar_ssize write_deflate(struct gzip_compressor *c, const void *buf, size_t len, int flush)
-{
+static scar_ssize write_deflate(
+	struct gzip_compressor *c, const void *buf, size_t len, int flush
+) {
 	unsigned char chunk[4 * 1024];
 
 	assert((size_t)(uInt)len == len);
@@ -48,8 +50,9 @@ static scar_ssize write_deflate(struct gzip_compressor *c, const void *buf, size
 	return (scar_ssize)len;
 }
 
-static scar_ssize gzip_compressor_write(struct scar_io_writer *ptr, const void *buf, size_t len)
-{
+static scar_ssize gzip_compressor_write(
+	struct scar_io_writer *ptr, const void *buf, size_t len
+) {
 	return write_deflate((struct gzip_compressor *)ptr, buf, len, Z_NO_FLUSH);
 }
 
@@ -63,8 +66,9 @@ static int gzip_compressor_finish(struct scar_compressor *ptr)
 	return (int)write_deflate((struct gzip_compressor *)ptr, NULL, 0, Z_FINISH);
 }
 
-static struct scar_compressor *create_gzip_compressor(struct scar_io_writer *w, int level)
-{
+static struct scar_compressor *create_gzip_compressor(
+	struct scar_io_writer *w, int level
+) {
 	struct gzip_compressor *c = malloc(sizeof(*c));
 	if (!c) {
 		SCAR_ERETURN(NULL);
@@ -73,7 +77,9 @@ static struct scar_compressor *create_gzip_compressor(struct scar_io_writer *w, 
 	c->stream.zalloc = Z_NULL;
 	c->stream.zfree = Z_NULL;
 	c->stream.opaque = Z_NULL;
-	if (deflateInit2(&c->stream, level, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+	if (deflateInit2(
+		&c->stream, level, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK
+	) {
 		free(c);
 		SCAR_ERETURN(NULL);
 	}
@@ -106,8 +112,9 @@ struct gzip_decompressor {
 	unsigned char chunk[4 * 1024];
 };
 
-static scar_ssize gzip_decompressor_read(struct scar_io_reader *ptr, void *buf, size_t len)
-{
+static scar_ssize gzip_decompressor_read(
+	struct scar_io_reader *ptr, void *buf, size_t len
+) {
 	struct gzip_decompressor *d = (struct gzip_decompressor *)ptr;
 
 	assert((size_t)(uInt)len == len);

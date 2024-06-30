@@ -23,7 +23,8 @@ TEST(compress)
 		"Please stay seated until we reach our calculated cruising altitude\n"
 		"of approximately 50 feet.\n"
 		"Our technicians are currently installing fasten seatbelt signs.\n"
-		"If installed in time, the fasten seatbelt signs will switch on once we are ready to\n"
+		"If installed in time, the fasten seatbelt signs "
+		"will switch on once we are ready to\n"
 		"go in for landing, or if we encounter unexpected turbulence.\n";
 
 	unsigned char compressed_data[] = {

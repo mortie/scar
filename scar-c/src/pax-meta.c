@@ -95,16 +95,18 @@ void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path, uint64_t si
 	meta->size = size;
 }
 
-void scar_pax_meta_init_hardlink(struct scar_pax_meta *meta, char *path, char *linkpath)
-{
+void scar_pax_meta_init_hardlink(
+	struct scar_pax_meta *meta, char *path, char *linkpath
+) {
 	scar_pax_meta_init_empty(meta);
 	meta->type = SCAR_FT_HARDLINK;
 	meta->path = dupstr(path);
 	meta->linkpath = dupstr(linkpath);
 }
 
-void scar_pax_meta_init_symlink(struct scar_pax_meta *meta, char *path, char *linkpath)
-{
+void scar_pax_meta_init_symlink(
+	struct scar_pax_meta *meta, char *path, char *linkpath
+) {
 	scar_pax_meta_init_empty(meta);
 	meta->type = SCAR_FT_SYMLINK;
 	meta->path = dupstr(path);
@@ -118,8 +120,9 @@ void scar_pax_meta_init_directory(struct scar_pax_meta *meta, char *path)
 	meta->path = dupstr(path);
 }
 
-void scar_pax_meta_init_chardev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min)
-{
+void scar_pax_meta_init_chardev(
+	struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min
+) {
 	scar_pax_meta_init_empty(meta);
 	meta->type = SCAR_FT_CHARDEV;
 	meta->path = dupstr(path);
@@ -127,8 +130,9 @@ void scar_pax_meta_init_chardev(struct scar_pax_meta *meta, char *path, uint32_t
 	meta->devminor = min;
 }
 
-void scar_pax_meta_init_blockdev(struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min)
-{
+void scar_pax_meta_init_blockdev(
+	struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min
+) {
 	scar_pax_meta_init_empty(meta);
 	meta->type = SCAR_FT_BLOCKDEV;
 	meta->path = dupstr(path);

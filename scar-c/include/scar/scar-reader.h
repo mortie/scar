@@ -7,6 +7,7 @@
 struct scar_reader;
 
 /// Create a scar_reader.
-struct scar_reader *scar_reader_create(struct scar_io_reader *r, struct scar_io_seeker *s);
+struct scar_reader *scar_reader_create(
+	struct scar_io_reader *r, struct scar_io_seeker *s);
 
 #endif
