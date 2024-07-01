@@ -7,9 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
- * Utility functions
- */
+//
+// Utility functions
+//
 
 scar_ssize scar_io_printf(struct scar_io_writer *w, const char *fmt, ...)
 {
@@ -204,10 +204,21 @@ scar_ssize scar_mem_writer_write(
 	return (scar_ssize)len;
 }
 
+int scar_mem_writer_put(struct scar_mem_writer *mw, unsigned char ch)
+{
+	if (mem_writer_grow(mw, 1) < 0) {
+		SCAR_ERETURN(-1);
+	}
+
+	((unsigned char *)mw->buf)[mw->len] = ch;
+	mw->len += 1;
+	return 0;
+}
+
 void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len)
 {
 	if (mem_writer_grow(mw, len) < 0) {
-		return NULL;
+		SCAR_ERETURN(NULL);
 	}
 
 	void *buf = &((unsigned char *)mw->buf)[mw->len];
@@ -224,17 +235,142 @@ void scar_counting_writer_init(
 ) {
 	cw->w.write = scar_counting_writer_write;
 	cw->backing_w = w;
-	cw->written = 0;
+	cw->count = 0;
 }
 
 scar_ssize scar_counting_writer_write(
 	struct scar_io_writer *w, const void *buf, size_t len
 ) {
 	struct scar_counting_writer *cw = SCAR_BASE(struct scar_counting_writer, w);
-	scar_ssize written = cw->backing_w->write(cw->backing_w, buf, len);
-	if (written > 0) {
-		cw->written += written;
+	scar_ssize count = cw->backing_w->write(cw->backing_w, buf, len);
+	if (count > 0) {
+		cw->count += count;
 	}
 
-	return written;
+	return count;
+}
+
+//
+// scar_counting_reader
+//
+
+void scar_counting_reader_init(
+	struct scar_counting_reader *cr, struct scar_io_reader *r
+) {
+	cr->r.read = scar_counting_reader_read;
+	cr->backing_r = r;
+	cr->count = 0;
+}
+
+scar_ssize scar_counting_reader_read(
+	struct scar_io_reader *r, void *buf, size_t len
+) {
+	struct scar_counting_reader *cr = SCAR_BASE(struct scar_counting_reader, r);
+	scar_ssize count = cr->backing_r->read(cr->backing_r, buf, len);
+	if (count > 0) {
+		cr->count += count;
+	}
+
+	return count;
+}
+
+//
+// scar_block_reader
+//
+
+void scar_block_reader_init(
+	struct scar_block_reader *br, struct scar_io_reader *r, uint64_t size
+) {
+	br->r = r;
+	br->index = 0;
+	br->bufcap = 0;
+	br->size = size;
+
+	if (size == 0) {
+		return;
+	}
+
+	size_t len = sizeof(br->block);
+	if (len > size) len = size;
+
+	scar_ssize n = r->read(r, br->block, len);
+	if (n < (scar_ssize)len) {
+		br->next = EOF;
+		br->eof = 1;
+		br->error = 1;
+	} else {
+		br->bufcap = (int)n;
+		br->next = br->block[br->index++];
+		br->eof = 0;
+		br->error = 0;
+		br->size -= (uint64_t)n;
+	}
+}
+
+void scar_block_reader_consume(struct scar_block_reader *br)
+{
+	if (br->eof) {
+		return;
+	}
+
+	if (br->index >= br->bufcap) {
+		if (br->size == 0) {
+			br->next = EOF;
+			br->eof = 1;
+			return;
+		}
+
+		size_t len = sizeof(br->block);
+		if (len > br->size) len = br->size;
+
+		scar_ssize n = br->r->read(br->r, br->block, len);
+		if (n < (scar_ssize)len) {
+			br->next = EOF;
+			br->eof = 1;
+			br->error = 1;
+		} else {
+			br->index = 0;
+			br->next = br->block[0];
+			br->bufcap = (int)n;
+			br->size -= (uint64_t)n;
+		}
+
+		return;
+	}
+
+	br->next = br->block[br->index++];
+}
+
+int scar_block_reader_skip(struct scar_block_reader *br, size_t n)
+{
+	// This could be faster...
+	while (n > 0) {
+		if (br->next == EOF) {
+			SCAR_ERETURN(-1);
+		}
+
+		scar_block_reader_consume(br);
+		n -= 1;
+	}
+
+	return 0;
+}
+
+int scar_block_reader_read(struct scar_block_reader *br, void *buf, size_t n)
+{
+	// This could also be faster...
+	unsigned char *cbuf = (unsigned char *)buf;
+	while (n > 0) {
+		if (br->next == EOF) {
+			SCAR_ERETURN(-1);
+		}
+
+		*cbuf = (unsigned char)br->next;
+		cbuf += 1;
+
+		scar_block_reader_consume(br);
+		n -= 1;
+	}
+
+	return 0;
 }

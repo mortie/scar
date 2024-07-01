@@ -12,9 +12,16 @@ struct scar_reader {
 	struct scar_io_seeker *raw_s;
 	struct scar_compression comp;
 
-	struct scar_decompressor *tail_decompressor;
 	scar_offset index_offset;
 	scar_offset checkpoints_offset;
+};
+
+struct scar_index_iterator {
+	struct scar_mem_writer buf;
+	struct scar_block_reader br;
+	struct scar_counting_reader counter;
+	scar_offset next_offset;
+	struct scar_io_seeker *seeker;
 };
 
 static int suffix_match(
@@ -174,17 +181,71 @@ struct scar_reader *scar_reader_create(
 	sr->raw_r = r;
 	sr->raw_s = s;
 
-	sr->tail_decompressor = NULL;
-	sr->index_offset = 0;
-	sr->checkpoints_offset = 0;
-
 	return sr;
+}
+
+struct scar_index_iterator *scar_reader_iterate(struct scar_reader *sr)
+{
+	struct scar_index_iterator *it = NULL;
+
+	if (sr->raw_s->seek(sr->raw_s, sr->index_offset, SCAR_SEEK_START) < 0) {
+		return NULL;
+	}
+
+	it = malloc(sizeof(*it));
+	if (!it) {
+		return NULL;
+	}
+
+	scar_counting_reader_init(&it->counter, sr->raw_r);
+	scar_block_reader_init(&it->br, &it->counter.r, 0);
+
+	const char *head = "SCAR-INDEX\n";
+	const size_t head_len = strlen(head);
+	size_t remaining = head_len;
+	while (remaining > 0) {
+		if (it->br.eof) {
+			free(it->buf.buf);
+			free(it);
+			return NULL;
+		}
+
+		if (scar_mem_writer_put(&it->buf, it->br.next) < 0) {
+			free(it->buf.buf);
+			free(it);
+			return NULL;
+		}
+
+		remaining -= 1;
+	}
+
+	if (strncmp(head, it->buf.buf, head_len) != 0) {
+		free(it->buf.buf);
+		free(it);
+		return NULL;
+	}
+
+	it->next_offset = sr->index_offset + it->counter.count;
+	it->seeker = sr->raw_s;
+
+	return it;
+}
+
+int scar_index_iterator_next(
+	struct scar_index_iterator *it,
+	struct scar_index_entry *entry
+) {
+	// TODO
+	return 0;
+}
+
+void scar_index_iterator_free(struct scar_index_iterator *it)
+{
+	free(it->buf.buf);
+	free(it);
 }
 
 void scar_reader_free(struct scar_reader *sr)
 {
-	if (sr->tail_decompressor) {
-		sr->comp.destroy_decompressor(sr->tail_decompressor);
-	}
 	free(sr);
 }
