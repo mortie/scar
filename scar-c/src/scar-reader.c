@@ -29,28 +29,6 @@ struct scar_index_iterator {
 	struct scar_io_seeker *seeker;
 };
 
-static int suffix_match(
-		const void *heystack, size_t heystack_len,
-		const void *needle, size_t needle_len)
-{
-	if (needle_len > heystack_len) {
-		return 0;
-	}
-
-	unsigned char *heystack_ptr = (unsigned char *)heystack + (heystack_len - needle_len);
-	return memcmp(heystack_ptr, needle, needle_len) == 0;
-}
-
-static int find_compression(void *end, size_t end_len, struct scar_compression *out)
-{
-	scar_compression_init_gzip(out);
-	if (suffix_match(end, (size_t)end_len, out->eof_marker, out->eof_marker_len)) {
-		return 0;
-	}
-
-	SCAR_ERETURN(-1);
-}
-
 // Returns 1 if the tail was successfully parsed, 0 if not,
 // and -1 if it failed.
 static int parse_tail(struct scar_reader *sr, unsigned char *tail, size_t len)
@@ -170,7 +148,9 @@ struct scar_reader *scar_reader_create(
 	}
 
 	// Find the correct compression, based on a suffix match of the scar-end section
-	if (find_compression(end_block, (size_t)end_block_len, &sr->comp) < 0) {
+	if (!scar_compression_init_from_tail(
+		end_block, (size_t)end_block_len, &sr->comp)
+	) {
 		free(sr);
 		SCAR_ERETURN(NULL);
 	}

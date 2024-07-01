@@ -3,6 +3,8 @@
 
 #include "io.h"
 
+#include <stdbool.h>
+
 struct scar_compressor {
 	struct scar_io_writer w;
 	int (*flush)(struct scar_compressor *c);
@@ -28,6 +30,16 @@ struct scar_compression {
 
 void scar_compression_init_gzip(struct scar_compression *comp);
 
-int scar_compression_init_from_name(const char *name, struct scar_compression *comp);
+/// Initialize compression from human readable name.
+/// Returns true if one was found, false otherwise.
+bool scar_compression_init_from_name(
+	const char *name, struct scar_compression *comp);
+
+/// Initialize compression from magic bytes.
+/// Will perform a suffix match on the buffer against
+/// each compression's EOF marker.
+/// Returns true if one was found, false otherwise.
+bool scar_compression_init_from_tail(
+	void *buf, size_t len, struct scar_compression *comp);
 
 #endif
