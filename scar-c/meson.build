@@ -42,7 +42,8 @@ executable(
   'test-scar',
   'test/main.c',
   'test/compression/gzip.t.c',
-  'test/ioutil.t.c',
+  'test/ioutil/block-reader.t.c',
+  'test/ioutil/mem.t.c',
   'test/pax-syntax.t.c',
   dependencies: libscar_dep,
   include_directories: [

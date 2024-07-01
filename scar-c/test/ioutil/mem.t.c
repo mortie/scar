@@ -65,4 +65,4 @@ TEST(mem_writer_write)
 	OK();
 }
 
-TESTGROUP(ioutil, mem_reader_read, mem_reader_seek, mem_writer_write);
+TESTGROUP(ioutil_mem, mem_reader_read, mem_reader_seek, mem_writer_write);

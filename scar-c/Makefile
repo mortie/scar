@@ -28,12 +28,12 @@ check: $(OUT)/test-scar
 	$(OUT)/test-scar
 
 .PHONY: check-lldb
-check-lldb: $(OUT)/scar-test
-	lldb -o 'breakpoint set -n scar_breakpoint -C finish' -o 'run' $(OUT)/scar-test
+check-lldb: $(OUT)/test-scar
+	lldb -o 'breakpoint set -n scar_breakpoint -C finish' -o 'run' $<
 
 .PHONY: check-gdb
-check-gdb: $(OUT)/scar-test
-	gdb -ex 'break scar_breakpoint' -ex 'run' $(OUT)/scar-test
+check-gdb: $(OUT)/test-scar
+	gdb -ex 'break scar_breakpoint' -ex 'run' $<
 
 .PHONY: clean
 clean:

@@ -127,6 +127,8 @@ static scar_ssize gzip_decompressor_read(
 			scar_ssize n = d->r->read(d->r, d->chunk, sizeof(d->chunk));
 			if (n < 0) {
 				SCAR_ERETURN(-1);
+			} else if (n == 0) {
+				return (scar_ssize)(len - d->stream.avail_out);
 			}
 
 			d->stream.avail_in = (uInt)n;

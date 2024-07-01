@@ -1,9 +1,9 @@
 #include "pax-syntax.h"
 
+#include <string.h>
+
 #include "ioutil.h"
 #include "test.h"
-
-#include <string.h>
 
 TEST(basic_parsing)
 {

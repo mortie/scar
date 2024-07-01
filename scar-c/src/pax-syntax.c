@@ -189,8 +189,10 @@ static int parse_one(struct scar_pax_meta *meta, struct scar_block_reader *br) {
 int scar_pax_parse(
 	struct scar_pax_meta *meta, struct scar_io_reader *r, uint64_t size
 ) {
+	struct scar_limited_reader lr;
+	scar_limited_reader_init(&lr, r, size);
 	struct scar_block_reader br;
-	scar_block_reader_init(&br, r, size);
+	scar_block_reader_init(&br, &lr.r);
 
 	while (br.next != EOF) {
 		if (parse_one(meta, &br) < 0) {

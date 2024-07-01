@@ -5,7 +5,8 @@
 
 #define TEST_GROUPS \
 	X(compression_gzip) \
-	X(ioutil) \
+	X(ioutil_block_reader) \
+	X(ioutil_mem) \
 	X(pax_syntax) \
 //
 

@@ -79,8 +79,9 @@ static const int whences[] = {
 	[SCAR_SEEK_END] = SEEK_END,
 };
 
-int scar_file_handle_seek(struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence)
-{
+int scar_file_handle_seek(
+	struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence
+) {
 	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, s);
 	// TODO: Select fseek64 or fseeko based on platform
 	return fseek(sf->f, (long)offset, whences[whence]);
@@ -127,8 +128,9 @@ scar_ssize scar_mem_reader_read(struct scar_io_reader *r, void *buf, size_t len)
 	return (scar_ssize)n;
 }
 
-int scar_mem_reader_seek(struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence)
-{
+int scar_mem_reader_seek(
+	struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence
+) {
 	struct scar_mem_reader *mr = SCAR_BASE(struct scar_mem_reader, s);
 	scar_ssize newpos = 0;
 	switch (whence) {
@@ -275,35 +277,58 @@ scar_ssize scar_counting_reader_read(
 }
 
 //
+// scar_limited_reader
+//
+
+void scar_limited_reader_init(
+	struct scar_limited_reader *cr, struct scar_io_reader *r, scar_offset limit
+) {
+	cr->r.read = scar_limited_reader_read;
+	cr->backing_r = r;
+	cr->limit = limit;
+}
+
+scar_ssize scar_limited_reader_read(
+	struct scar_io_reader *r, void *buf, size_t len
+) {
+	struct scar_limited_reader *lr = SCAR_BASE(struct scar_limited_reader, r);
+	if (lr->limit <= 0) {
+		return 0;
+	}
+
+	if (len > lr->limit) {
+		len = lr->limit;
+	}
+
+	scar_ssize count = lr->backing_r->read(lr->backing_r, buf, len);
+	if (count > 0) {
+		lr->limit -= count;
+	}
+
+	return count;
+}
+
+//
 // scar_block_reader
 //
 
 void scar_block_reader_init(
-	struct scar_block_reader *br, struct scar_io_reader *r, uint64_t size
+	struct scar_block_reader *br, struct scar_io_reader *r
 ) {
 	br->r = r;
 	br->index = 0;
 	br->bufcap = 0;
-	br->size = size;
 
-	if (size == 0) {
-		return;
-	}
-
-	size_t len = sizeof(br->block);
-	if (len > size) len = size;
-
-	scar_ssize n = r->read(r, br->block, len);
-	if (n < (scar_ssize)len) {
+	scar_ssize n = r->read(r, br->block, sizeof(br->block));
+	if (n < 1) {
 		br->next = EOF;
 		br->eof = 1;
-		br->error = 1;
+		br->error = (int)n;
 	} else {
 		br->bufcap = (int)n;
 		br->next = br->block[br->index++];
 		br->eof = 0;
 		br->error = 0;
-		br->size -= (uint64_t)n;
 	}
 }
 
@@ -314,25 +339,15 @@ void scar_block_reader_consume(struct scar_block_reader *br)
 	}
 
 	if (br->index >= br->bufcap) {
-		if (br->size == 0) {
+		scar_ssize n = br->r->read(br->r, br->block, sizeof(br->block));
+		if (n < 1) {
 			br->next = EOF;
 			br->eof = 1;
-			return;
-		}
-
-		size_t len = sizeof(br->block);
-		if (len > br->size) len = br->size;
-
-		scar_ssize n = br->r->read(br->r, br->block, len);
-		if (n < (scar_ssize)len) {
-			br->next = EOF;
-			br->eof = 1;
-			br->error = 1;
+			br->error = (int)n;
 		} else {
 			br->index = 0;
-			br->next = br->block[0];
+			br->next = br->block[br->index++];
 			br->bufcap = (int)n;
-			br->size -= (uint64_t)n;
 		}
 
 		return;

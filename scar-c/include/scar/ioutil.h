@@ -80,6 +80,17 @@ struct scar_counting_reader {
 void scar_counting_reader_init(struct scar_counting_reader *cr, struct scar_io_reader *r);
 scar_ssize scar_counting_reader_read(struct scar_io_reader *r, void *buf, size_t len);
 
+/// A reader wrapper which limits the number of bytes read.
+struct scar_limited_reader {
+	struct scar_io_reader r;
+	struct scar_io_reader *backing_r;
+	scar_offset limit;
+};
+
+void scar_limited_reader_init(
+	struct scar_limited_reader *lr, struct scar_io_reader *r, scar_offset limit);
+scar_ssize scar_limited_reader_read(struct scar_io_reader *r, void *buf, size_t len);
+
 /// A wrapper around a reader which reads 512-byte blocks
 struct scar_block_reader {
 	struct scar_io_reader *r;
@@ -89,12 +100,11 @@ struct scar_block_reader {
 
 	int index;
 	int bufcap;
-	uint64_t size;
 	unsigned char block[512];
 };
 
 void scar_block_reader_init(
-	struct scar_block_reader *br, struct scar_io_reader *r, uint64_t size);
+	struct scar_block_reader *br, struct scar_io_reader *r);
 void scar_block_reader_consume(struct scar_block_reader *br);
 int scar_block_reader_skip(struct scar_block_reader *br, size_t n);
 int scar_block_reader_read(struct scar_block_reader *br, void *buf, size_t n);
