@@ -10,18 +10,10 @@ int cmd_ls(struct args *args, char **argv, int argc)
 	int ret = 0;
 	struct scar_reader *sr = NULL;
 	struct scar_index_iterator *it = NULL;
-	struct regexes rxs = {0};
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
 		fprintf(stderr, "Failed to create reader\n");
-		ret = 1;
-		goto exit;
-	}
-
-	it = scar_reader_iterate(sr);
-	if (it == NULL) {
-		fprintf(stderr, "Failed to create index iterator\n");
 		ret = 1;
 		goto exit;
 	}
@@ -37,25 +29,40 @@ int cmd_ls(struct args *args, char **argv, int argc)
 		patcount = argc;
 	}
 
-	build_regexes(&rxs, patterns, patcount, RX_MATCH_DIR_ENTRIES);
-
-	struct scar_index_entry entry;
-	while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
-		if (!regexes_match(&rxs, entry.name)) {
-			continue;
+	for (size_t i = 0; i < patcount; ++i) {
+		regex_t rx;
+		if (build_regex(&rx, patterns[i], RX_MATCH_DIR_ENTRIES) < 0) {
+			ret = 1;
+			goto exit;
 		}
 
-		fprintf(stderr, "%s\n", entry.name);
-	}
+		it = scar_reader_iterate(sr);
+		if (it == NULL) {
+			regfree(&rx);
+			fprintf(stderr, "Failed to create index iterator\n");
+			ret = 1;
+			goto exit;
+		}
 
-	if (ret < 0) {
-		fprintf(stderr, "Failed to iterate index\n");
-		ret = 1;
-		goto exit;
+		struct scar_index_entry entry;
+		while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
+			if (regexec(&rx, entry.name, 0, NULL, 0) != 0) {
+				continue;
+			}
+
+			fprintf(stderr, "%s\n", entry.name);
+		}
+
+		regfree(&rx);
+
+		if (ret < 0) {
+			fprintf(stderr, "Failed to iterate index\n");
+			ret = 1;
+			goto exit;
+		}
 	}
 
 exit:
-	free_regexes(&rxs);
 	if (it) {
 		scar_index_iterator_free(it);
 	}
