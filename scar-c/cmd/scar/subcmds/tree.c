@@ -5,12 +5,15 @@
 
 int cmd_tree(struct args *args, char **argv, int argc)
 {
-	(void)argv;
-	(void)argc;
-
 	int ret = 0;
 	struct scar_reader *sr = NULL;
 	struct scar_index_iterator *it = NULL;
+
+	if (argc > 0) {
+		fprintf(stderr, "Unexpected argument: '%s'\n", argv[0]);
+		ret = 1;
+		goto exit;
+	}
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
