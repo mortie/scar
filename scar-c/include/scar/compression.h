@@ -33,13 +33,13 @@ void scar_compression_init_gzip(struct scar_compression *comp);
 /// Initialize compression from human readable name.
 /// Returns true if one was found, false otherwise.
 bool scar_compression_init_from_name(
-	const char *name, struct scar_compression *comp);
+	struct scar_compression *comp, const char *name);
 
 /// Initialize compression from magic bytes.
 /// Will perform a suffix match on the buffer against
 /// each compression's EOF marker.
 /// Returns true if one was found, false otherwise.
 bool scar_compression_init_from_tail(
-	void *buf, size_t len, struct scar_compression *comp);
+	struct scar_compression *comp, void *buf, size_t len);
 
 #endif

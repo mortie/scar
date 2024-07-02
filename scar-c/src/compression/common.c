@@ -3,7 +3,7 @@
 #include <string.h>
 
 bool scar_compression_init_from_name(
-	const char *name, struct scar_compression *comp
+	struct scar_compression *comp, const char *name
 ) {
 	if (strcmp(name, "gzip") == 0) {
 		scar_compression_init_gzip(comp);
@@ -26,7 +26,7 @@ static int suffix_match(
 }
 
 bool scar_compression_init_from_tail(
-	void *buf, size_t len, struct scar_compression *comp
+	struct scar_compression *comp, void *buf, size_t len
 ) {
 	scar_compression_init_gzip(comp);
 	if (suffix_match(buf, (size_t)len, comp->eof_marker, comp->eof_marker_len)) {

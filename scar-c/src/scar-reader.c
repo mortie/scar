@@ -149,7 +149,7 @@ struct scar_reader *scar_reader_create(
 
 	// Find the correct compression, based on a suffix match of the scar-end section
 	if (!scar_compression_init_from_tail(
-		end_block, (size_t)end_block_len, &sr->comp)
+		&sr->comp, end_block, (size_t)end_block_len)
 	) {
 		free(sr);
 		SCAR_ERETURN(NULL);
