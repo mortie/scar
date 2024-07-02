@@ -10,7 +10,7 @@ int cmd_ls(struct args *args, char **argv, int argc)
 	int ret = 0;
 	struct scar_reader *sr = NULL;
 	struct scar_index_iterator *it = NULL;
-	struct regexes rxs = {};
+	struct regexes rxs = {0};
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {

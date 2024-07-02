@@ -301,7 +301,7 @@ scar_ssize scar_limited_reader_read(
 		return 0;
 	}
 
-	if (len > lr->limit) {
+	if ((scar_offset)len > lr->limit) {
 		len = lr->limit;
 	}
 

@@ -2,6 +2,7 @@
 #include <scar/compression.h>
 #include <scar/scar-writer.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "../rx.h"
 #include "../subcmds.h"
@@ -15,6 +16,13 @@ int cmd_convert(struct args *args, char **argv, int argc)
 
 	if (argc > 0) {
 		fprintf(stderr, "Unexpected argument: '%s'\n", argv[0]);
+		ret = 1;
+		goto exit;
+	}
+
+	if (isatty(fileno(args->output.f)) && !args->force) {
+		fprintf(stderr, "Refusing to write to a TTY.\n");
+		fprintf(stderr, "Re-run with '--force' to ignore this check.\n");
 		ret = 1;
 		goto exit;
 	}

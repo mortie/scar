@@ -4,7 +4,7 @@
 
 TEST(repeated_consume) {
 	unsigned char text[4000];
-	for (int i = 0; i < sizeof(text); ++i) {
+	for (size_t i = 0; i < sizeof(text); ++i) {
 		text[i] = '0' + (i % 10);
 	}
 
@@ -14,7 +14,7 @@ TEST(repeated_consume) {
 	struct scar_block_reader br;
 	scar_block_reader_init(&br, &mr.r);
 
-	for (int i = 0; i < sizeof(text); ++i) {
+	for (size_t i = 0; i < sizeof(text); ++i) {
 		ASSERT(!br.eof);
 		ASSERT(!br.error);
 		ASSERT(br.next == text[i]);
