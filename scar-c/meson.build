@@ -1,4 +1,10 @@
-project('scar', 'c')
+project(
+  'scar', 'c',
+  default_options: [
+    'c_std=c99',
+    'warning_level=3',
+  ]
+)
 
 zlib_dep = dependency('zlib')
 

@@ -10,23 +10,25 @@
 #include "subcmds.h"
 #include "args.h"
 
+static const char *usageText =
+	"Usage: %s [options] <scar file> <command> [args...]\n"
+	"\n"
+	"Commands:\n"
+	"  ls [files...] List the contents of directories in the archive.\n"
+	"  tree          List all the entries in the archive.\n"
+	"  convert       Convert a tar/pax file to a scar file.\n"
+	"\n"
+	"Options:\n"
+	"  -o,--out   <file>  Output file (default: stdout)\n"
+	"  -c,--comp  <gzip>  Compression algorithm (default: gzip)\n"
+	"  -l,--level <level> Compression level (default: 6)\n"
+	"  -f,--force         Perform the task even if sanity checks fail\n"
+	"                     (for example, write binary data to stdout)\n"
+	"  -h,--help          Show this help output\n";
+
 static void usage(FILE *f, char *argv0)
 {
-	fprintf(f, "Usage: %s [options] <command> [args...]\n", argv0);
-	fprintf(f, "Commands:\n");
-	fprintf(f, "  ls [files...]: List the contents of directories, "
-		 "like the 'ls' command.\n");
-	fprintf(f, "                 Defaults to showing the contents of the root directory.\n");
-	fprintf(f, "  tree:          List all the files in the archive.\n");
-	fprintf(f, "  convert:       Convert a tar/pax file to a scar file.\n");
-	fprintf(f, "Options:\n");
-	fprintf(f, "  -i,--in    <file>  Input file (default: stdin)\n");
-	fprintf(f, "  -o,--out   <file>  Output file (default: stdout)\n");
-	fprintf(f, "  -c,--comp  <gzip>  Compression algorithm (default: gzip)\n");
-	fprintf(f, "  -l,--level <level> Compression level (default: 6)\n");
-	fprintf(f, "  -f,--force         Perform the task even if sanity checks fail\n");
-	fprintf(f, "                     (for example, write binary data to stdout)\n");
-	fprintf(f, "  -h,--help          Show this help output\n");
+	fprintf(f, usageText, argv0);
 }
 
 static bool streq(const char *a, const char *b)
@@ -47,30 +49,17 @@ int main(int argc, char **argv)
 	args.force = false;
 
 	static struct option opts[] = {
-		{"in",    required_argument, NULL, 'i'},
 		{"out",   required_argument, NULL, 'o'},
 		{"comp" , required_argument, NULL, 'c'},
 		{"level", required_argument, NULL, 'l'},
 		{"force", no_argument,       NULL, 'f'},
 		{"help",  no_argument,       NULL, 'h'},
-		{},
+		{0},
 	};
 
 	int ch;
-	while ((ch = getopt_long(argc, argv, "i:o:c:l:fh", opts, NULL)) != -1) {
+	while ((ch = getopt_long(argc, argv, "o:c:l:fh", opts, NULL)) != -1) {
 		switch (ch) {
-		case 'i':
-			if (streq(optarg, "-")) {
-				break;
-			}
-
-			args.input.f = fopen(optarg, "r");
-			if (!args.input.f) {
-				fprintf(stderr, "%s: %s\n", optarg, strerror(errno));
-				ret = 1;
-				goto exit;
-			}
-			break;
 		case 'o':
 			if (streq(optarg, "-")) {
 				break;
@@ -108,15 +97,25 @@ int main(int argc, char **argv)
 	argv += optind;
 	argc -= optind;
 
-	if (argc == 0) {
+	if (argc < 2) {
 		usage(stderr, argv0);
 		ret = 1;
 		goto exit;
 	}
 
-	const char *subcmd = argv[0];
-	argv += 1;
-	argc -= 1;
+	if (!streq(argv[0], "-")) {
+		args.input.f = fopen(argv[0], "r");
+		if (!args.input.f) {
+			fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
+			ret = 1;
+			goto exit;
+		}
+	}
+
+	const char *subcmd = argv[1];
+
+	argv += 2;
+	argc -= 2;
 
 	if (streq(subcmd, "ls") ) {
 		ret = cmd_ls(&args, argv, argc);

@@ -5,6 +5,9 @@
 
 int cmd_tree(struct args *args, char **argv, int argc)
 {
+	(void)argv;
+	(void)argc;
+
 	int ret = 0;
 	struct scar_reader *sr = NULL;
 	struct scar_index_iterator *it = NULL;
