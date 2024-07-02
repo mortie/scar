@@ -30,10 +30,11 @@ libscar_dep = declare_dependency(
 
 executable(
   'scar',
-  'cmd/scar/convert.c',
-  'cmd/scar/ls.c',
+  'cmd/scar/subcmds/convert.c',
+  'cmd/scar/subcmds/ls.c',
+  'cmd/scar/subcmds/tree.c',
   'cmd/scar/main.c',
-  'cmd/scar/util.c',
+  'cmd/scar/rx.c',
   dependencies: libscar_dep,
   install: true,
 )

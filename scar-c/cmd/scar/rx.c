@@ -1,4 +1,4 @@
-#include "util.h"
+#include "rx.h"
 
 #include <scar/ioutil.h>
 #include <stdio.h>
@@ -6,60 +6,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
-int open_ifile(struct scar_file_handle *sf, char *path)
-{
-	if (path == NULL || strcmp(path , "-") == 0) {
-		scar_file_handle_init(sf, stdin);
-		return 0;
-	}
-
-	FILE *f = fopen(path, "r");
-	if (f == NULL) {
-		fprintf(stderr, "Open %s: %s\n", path, strerror(errno));
-		return -1;
-	}
-
-	scar_file_handle_init(sf, f);
-	return 0;
-}
-
-int open_ofile(struct scar_file_handle *sf, char *path)
-{
-	if (path == NULL || strcmp(path , "-") == 0) {
-		scar_file_handle_init(sf, stdout);
-		return 0;
-	}
-
-	FILE *f = fopen(path, "w");
-	if (f == NULL) {
-		fprintf(stderr, "Open %s: %s\n", path, strerror(errno));
-		return -1;
-	}
-
-	scar_file_handle_init(sf, f);
-	return 0;
-}
-
-void close_file(struct scar_file_handle *sf)
-{
-	if (sf->f != NULL && sf->f != stdin && sf->f != stdout) {
-		fclose(sf->f);
-	}
-}
-
-char *next_arg(char ***argv, int *argc)
-{
-	if (*argc <= 0) {
-		return NULL;
-	}
-
-	char *arg = **argv;
-	*argv += 1;
-	*argc -= 1;
-	return arg;
-}
-
-int build_regex(regex_t *reg, const char *pattern)
+int build_regex(regex_t *reg, const char *pattern, enum rx_opts opts)
 {
 	struct scar_mem_writer mw = {0};
 	scar_mem_writer_init(&mw);
@@ -85,7 +32,11 @@ int build_regex(regex_t *reg, const char *pattern)
 		}
 	}
 
-	scar_io_puts(&mw.w, "(/[^/]+)?/?$");
+	if (opts & RX_MATCH_DIR_ENTRIES) {
+		scar_io_puts(&mw.w, "(/[^/]+)?/?");
+	}
+
+	scar_mem_writer_put(&mw, '$');
 	scar_mem_writer_put(&mw, '\0');
 
 	int err;
@@ -102,13 +53,16 @@ int build_regex(regex_t *reg, const char *pattern)
 	return 0;
 }
 
-int build_regexes(struct regexes *rxs, char **patterns, size_t count)
-{
+int build_regexes(
+	struct regexes *rxs, char **patterns, size_t count, enum rx_opts opts
+) {
 	rxs->regexes = malloc(count * sizeof(*rxs->regexes));
 	rxs->count = 0;
 
 	while (rxs->count < count) {
-		if (build_regex(&rxs->regexes[rxs->count], patterns[rxs->count]) < 0) {
+		if (
+			build_regex(&rxs->regexes[rxs->count], patterns[rxs->count], opts) < 0
+		) {
 			free_regexes(rxs);
 			return -1;
 		}

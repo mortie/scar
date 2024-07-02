@@ -1,18 +1,16 @@
 #include <scar/pax.h>
 #include <scar/compression.h>
 #include <scar/scar-writer.h>
-#include <stdlib.h>
+#include <stdio.h>
 
-#include "util.h"
-#include "subcommands.h"
+#include "../rx.h"
+#include "../subcmds.h"
 
 int cmd_convert(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
-
 	struct scar_pax_meta global = {0};
 	struct scar_pax_meta meta = {0};
-
 	struct scar_writer *sw = NULL;
 
 	if (argc > 0) {

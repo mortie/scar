@@ -1,17 +1,13 @@
-#include <scar/pax.h>
 #include <scar/scar-reader.h>
-#include <stdbool.h>
+#include <stdio.h>
 
-#include "util.h"
-#include "subcommands.h"
+#include "../subcmds.h"
 
-int cmd_ls(struct args *args, char **argv, int argc)
+int cmd_tree(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
-
 	struct scar_reader *sr = NULL;
 	struct scar_index_iterator *it = NULL;
-	struct regexes rxs = {};
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
@@ -27,27 +23,9 @@ int cmd_ls(struct args *args, char **argv, int argc)
 		goto exit;
 	}
 
-	char *default_pattern = ".";
-	char **patterns;
-	size_t patcount;
-	if (argc == 0) {
-		patterns = &default_pattern;
-		patcount = 1;
-	} else {
-		patterns = argv;
-		patcount = argc;
-	}
-
-	build_regexes(&rxs, patterns, patcount);
-
 	struct scar_index_entry entry;
 	while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
-		if (regexes_match(&rxs, entry.name)) {
-			fprintf(
-				stderr, "%c: %s @ %lld\n",
-				scar_pax_filetype_to_char(entry.ft),
-				entry.name, entry.offset);
-		}
+		fprintf(stderr, "%s\n", entry.name);
 	}
 
 	if (ret < 0) {
@@ -57,7 +35,6 @@ int cmd_ls(struct args *args, char **argv, int argc)
 	}
 
 exit:
-	free_regexes(&rxs);
 	if (it) {
 		scar_index_iterator_free(it);
 	}

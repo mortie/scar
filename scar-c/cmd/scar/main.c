@@ -7,18 +7,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "subcommands.h"
+#include "subcmds.h"
 #include "args.h"
 
 static void usage(FILE *f, char *argv0)
 {
 	fprintf(f, "Usage: %s [options] <command> [args...]\n", argv0);
 	fprintf(f, "Commands:\n");
-	fprintf(f, "  ls [files...]: List files in the archive.");
+	fprintf(f, "  ls [files...]: List the contents of directories, "
+		 "like the 'ls' command.\n");
+	fprintf(f, "                 Defaults to showing the contents of the root directory.\n");
+	fprintf(f, "  tree:          List all the files in the archive.\n");
 	fprintf(f, "  convert:       Convert a tar/pax file to a scar file.\n");
 	fprintf(f, "Options:\n");
-	fprintf(f, "  -i,--in    <file>  Input file\n");
-	fprintf(f, "  -o,--out   <file>  Output file\n");
+	fprintf(f, "  -i,--in    <file>  Input file (default: stdin)\n");
+	fprintf(f, "  -o,--out   <file>  Output file (default: stdout)\n");
 	fprintf(f, "  -c,--comp  <gzip>  Compression algorithm (default: gzip)\n");
 	fprintf(f, "  -l,--level <level> Compression level (default: 6)\n");
 	fprintf(f, "  -f,--force         Perform the task even if sanity checks fail\n");
@@ -117,6 +120,8 @@ int main(int argc, char **argv)
 
 	if (streq(subcmd, "ls") ) {
 		ret = cmd_ls(&args, argv, argc);
+	} else if (streq(subcmd, "tree")) {
+		ret = cmd_tree(&args, argv, argc);
 	} else if (streq(subcmd, "convert")) {
 		ret = cmd_convert(&args, argv, argc);
 	} else {
