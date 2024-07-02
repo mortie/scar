@@ -1,0 +1,6 @@
+option(
+  'trace-errors',
+  type: 'boolean',
+  value: false,
+  description: 'Print error return stack traces',
+)

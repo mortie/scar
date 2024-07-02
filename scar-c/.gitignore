@@ -1,0 +1,9 @@
+/build
+/.cache
+/libscar.so
+/scar-test
+/scar-test-writer
+/pax-analyze
+/scar
+/tar-analyze
+/compile_commands.json
