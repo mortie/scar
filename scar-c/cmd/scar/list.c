@@ -1,6 +1,7 @@
 #include <scar/pax.h>
 #include <scar/scar-reader.h>
 #include <getopt.h>
+#include <stdbool.h>
 
 #include "util.h"
 #include "subcommands.h"
@@ -35,12 +36,6 @@ int cmd_list(char **argv, int argc)
 		goto exit;
 	}
 
-	if (argc > 0) {
-		fprintf(stderr, "Unexpected argument: '%s'\n", argv[0]);
-		ret = 1;
-		goto exit;
-	}
-
 	sr = scar_reader_create(&ifile.r, &ifile.s);
 	if (!sr) {
 		fprintf(stderr, "Failed to create reader\n");
@@ -55,13 +50,31 @@ int cmd_list(char **argv, int argc)
 		goto exit;
 	}
 
+	char *default_pattern = ".";
+	char **patterns;
+	size_t patcount;
+	if (argc == 0) {
+		patterns = &default_pattern;
+		patcount = 1;
+	} else {
+		patterns = argv;
+		patcount = argc;
+	}
+
+	struct regexes rxs;
+	build_regexes(&rxs, patterns, patcount);
+
 	struct scar_index_entry entry;
 	while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
-		fprintf(
-			stderr, "%c: %s @ %lld\n",
-			scar_pax_filetype_to_char(entry.ft),
-			entry.name, entry.offset);
+		if (regexes_match(&rxs, entry.name)) {
+			fprintf(
+				stderr, "%c: %s @ %lld\n",
+				scar_pax_filetype_to_char(entry.ft),
+				entry.name, entry.offset);
+		}
 	}
+
+	free_regexes(&rxs);
 
 	if (ret < 0) {
 		fprintf(stderr, "Failed to iterate index\n");

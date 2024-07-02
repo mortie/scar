@@ -17,6 +17,10 @@ scar_ssize scar_io_printf(struct scar_io_writer *w, const char *fmt, ...)
 /// Returns the number of bytes written, or -1 on error.
 scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap);
 
+/// Write a string to a stream.
+/// Calls the write method with 'strlen(str)' as the size.
+scar_ssize scar_io_puts(struct scar_io_writer *w, const char *str);
+
 /// A wrapper around a FILE* which implements reader, writer and seeker.
 struct scar_file_handle {
 	struct scar_io_reader r;

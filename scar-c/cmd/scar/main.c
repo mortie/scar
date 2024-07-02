@@ -9,7 +9,7 @@
 static void usage(char *argv0)
 {
 	printf("Usage: %s convert [in] [out]\n", argv0);
-	printf("       %s list [in]\n", argv0);
+	printf("       %s list [in] [files...]\n", argv0);
 }
 
 int main(int argc, char **argv)

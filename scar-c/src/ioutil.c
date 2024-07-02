@@ -38,6 +38,11 @@ scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap
 	return ret;
 }
 
+scar_ssize scar_io_puts(struct scar_io_writer *w, const char *str)
+{
+	return w->write(w, str, strlen(str));
+}
+
 //
 // scar_file_handle
 //
