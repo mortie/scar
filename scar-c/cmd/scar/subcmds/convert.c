@@ -16,45 +16,39 @@ int cmd_convert(struct args *args, char **argv, int argc)
 
 	if (argc > 0) {
 		fprintf(stderr, "Unexpected argument: '%s'\n", argv[0]);
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	if (isatty(fileno(args->output.f)) && !args->force) {
 		fprintf(stderr, "Refusing to write to a TTY.\n");
 		fprintf(stderr, "Re-run with '--force' to ignore this check.\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	sw = scar_writer_create(&args->output.w, &args->comp, args->level);
 	if (sw == NULL) {
 		fprintf(stderr, "Failed to create writer\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	scar_pax_meta_init_empty(&global);
 	while (1) {
 		int r = scar_pax_read_meta(&global, &meta, &args->input.r);
 		if (r < 0) {
-			ret = 1;
-			goto exit;
+			goto err;
 		} else if (r == 0) {
 			break;
 		}
 
 		if (scar_writer_write_entry(sw, &meta, &args->input.r) < 0) {
 			fprintf(stderr, "Failed to write SCAR entry\n");
-			ret = 1;
-			goto exit;
+			goto err;
 		}
 	}
 
 	if (scar_writer_finish(sw) < 0) {
 		fprintf(stderr, "Failed to finish SCAR archive\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 exit:
@@ -64,4 +58,7 @@ exit:
 	scar_pax_meta_destroy(&meta);
 	scar_pax_meta_destroy(&global);
 	return ret;
+err:
+	ret = 1;
+	goto exit;
 }

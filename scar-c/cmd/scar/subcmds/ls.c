@@ -14,8 +14,7 @@ int cmd_ls(struct args *args, char **argv, int argc)
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
 		fprintf(stderr, "Failed to create reader\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	char *default_pattern = ".";
@@ -32,16 +31,14 @@ int cmd_ls(struct args *args, char **argv, int argc)
 	for (size_t i = 0; i < patcount; ++i) {
 		regex_t rx;
 		if (build_regex(&rx, patterns[i], RX_MATCH_DIR_ENTRIES) < 0) {
-			ret = 1;
-			goto exit;
+			goto err;
 		}
 
 		it = scar_reader_iterate(sr);
 		if (it == NULL) {
 			regfree(&rx);
 			fprintf(stderr, "Failed to create index iterator\n");
-			ret = 1;
-			goto exit;
+			goto err;
 		}
 
 		struct scar_index_entry entry;
@@ -57,8 +54,7 @@ int cmd_ls(struct args *args, char **argv, int argc)
 
 		if (ret < 0) {
 			fprintf(stderr, "Failed to iterate index\n");
-			ret = 1;
-			goto exit;
+			goto err;
 		}
 	}
 
@@ -70,4 +66,7 @@ exit:
 		scar_reader_free(sr);
 	}
 	return ret;
+err:
+	ret = 1;
+	goto exit;
 }

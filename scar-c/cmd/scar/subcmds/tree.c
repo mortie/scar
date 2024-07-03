@@ -11,22 +11,19 @@ int cmd_tree(struct args *args, char **argv, int argc)
 
 	if (argc > 0) {
 		fprintf(stderr, "Unexpected argument: '%s'\n", argv[0]);
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
 		fprintf(stderr, "Failed to create reader\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	it = scar_reader_iterate(sr);
 	if (it == NULL) {
 		fprintf(stderr, "Failed to create index iterator\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	struct scar_index_entry entry;
@@ -36,8 +33,7 @@ int cmd_tree(struct args *args, char **argv, int argc)
 
 	if (ret < 0) {
 		fprintf(stderr, "Failed to iterate index\n");
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 exit:
@@ -48,4 +44,7 @@ exit:
 		scar_reader_free(sr);
 	}
 	return ret;
+err:
+	ret = 1;
+	goto exit;
 }

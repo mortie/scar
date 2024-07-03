@@ -68,15 +68,13 @@ int main(int argc, char **argv)
 			args.output.f = fopen(optarg, "w");
 			if (!args.output.f) {
 				fprintf(stderr, "%s: %s\n", optarg, strerror(errno));
-				ret = 1;
-				goto exit;
+				goto err;
 			}
 			break;
 		case 'c':
 			if (!scar_compression_init_from_name(&args.comp, optarg)) {
 				fprintf(stderr, "%s: Unknown compression\n", optarg);
-				ret = 1;
-				goto exit;
+				goto err;
 			}
 			break;
 		case 'l':
@@ -89,8 +87,7 @@ int main(int argc, char **argv)
 			usage(stdout, argv0);
 			goto exit;
 		default:
-			ret = 1;
-			goto exit;
+			goto err;
 		}
 	}
 
@@ -99,16 +96,14 @@ int main(int argc, char **argv)
 
 	if (argc < 2) {
 		usage(stderr, argv0);
-		ret = 1;
-		goto exit;
+		goto err;
 	}
 
 	if (!streq(argv[0], "-")) {
 		args.input.f = fopen(argv[0], "r");
 		if (!args.input.f) {
 			fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
-			ret = 1;
-			goto exit;
+			goto err;
 		}
 	}
 
@@ -137,4 +132,7 @@ exit:
 		fclose(args.output.f);
 	}
 	return ret;
+err:
+	ret = 1;
+	goto exit;
 }
