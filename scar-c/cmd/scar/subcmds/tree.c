@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include <scar/scar-reader.h>
+#include <scar/scar.h>
 
 int cmd_tree(struct args *args, char **argv, int argc)
 {

@@ -4,9 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <scar/pax.h>
-#include <scar/ioutil.h>
-#include <scar/scar-reader.h>
+#include <scar/scar.h>
 
 #include "subcmds.h"
 #include "args.h"

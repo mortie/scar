@@ -5,9 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <scar/pax.h>
-#include <scar/compression.h>
-#include <scar/scar-writer.h>
+#include <scar/scar.h>
 
 int cmd_convert(struct args *args, char **argv, int argc)
 {

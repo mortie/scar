@@ -2,8 +2,7 @@
 
 #include <stdio.h>
 
-#include <scar/pax.h>
-#include <scar/scar-reader.h>
+#include <scar/scar.h>
 
 #include "../rx.h"
 

@@ -3,8 +3,7 @@
 
 #include <stdbool.h>
 
-#include <scar/ioutil.h>
-#include <scar/compression.h>
+#include <scar/scar.h>
 
 struct args {
 	struct scar_file_handle input;

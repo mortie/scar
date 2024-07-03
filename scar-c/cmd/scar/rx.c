@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <scar/ioutil.h>
+#include <scar/scar.h>
 
 int build_regex(regex_t *reg, const char *pattern, enum rx_opts opts)
 {
