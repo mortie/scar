@@ -6,6 +6,8 @@ project(
   ]
 )
 
+cc = meson.get_compiler('c')
+m_dep = cc.find_library('m')
 zlib_dep = dependency('zlib')
 
 args = []
@@ -24,7 +26,7 @@ libscar = library(
   'src/scar-reader.c',
   'src/scar-writer.c',
   c_args: args,
-  dependencies: zlib_dep,
+  dependencies: [zlib_dep, m_dep],
   install: true,
   include_directories: 'include/scar',
 )

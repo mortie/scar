@@ -2,8 +2,6 @@
 
 #include <scar/ioutil.h>
 #include <stdio.h>
-#include <string.h>
-#include <errno.h>
 #include <stdlib.h>
 
 int build_regex(regex_t *reg, const char *pattern, enum rx_opts opts)

@@ -25,7 +25,7 @@ int cmd_ls(struct args *args, char **argv, int argc)
 		patcount = 1;
 	} else {
 		patterns = argv;
-		patcount = argc;
+		patcount = (size_t)argc;
 	}
 
 	for (size_t i = 0; i < patcount; ++i) {

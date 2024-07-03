@@ -1,6 +1,5 @@
 #include "pax.h"
 
-#include "util.h"
 #include "ioutil.h"
 #include "pax-syntax.h"
 #include "ustar.h"
