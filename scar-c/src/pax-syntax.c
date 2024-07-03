@@ -64,8 +64,9 @@ static int parse_time(struct scar_block_reader *br, size_t size, double *num)
 	return 0;
 }
 
-static int scar_parse_string(struct scar_block_reader *br, size_t size, char **str)
-{
+static int scar_parse_string(
+	struct scar_block_reader *br, size_t size, char **str
+) {
 	char *buf = malloc(size + 1);
 	if (buf == NULL) {
 		SCAR_ERETURN(-1);

@@ -1,9 +1,9 @@
 #ifndef SCAR_COMPRESSION_H
 #define SCAR_COMPRESSION_H
 
-#include "io.h"
-
 #include <stdbool.h>
+
+#include "io.h"
 
 struct scar_compressor {
 	struct scar_io_writer w;

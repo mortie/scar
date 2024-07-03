@@ -1,11 +1,11 @@
 #include "pax-meta.h"
 
-#include "ioutil.h"
-
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <inttypes.h>
+
+#include "ioutil.h"
 
 static char *dupstr(const char *src)
 {
@@ -87,8 +87,9 @@ void scar_pax_meta_init_empty(struct scar_pax_meta *meta)
 	meta->uname = NULL;
 }
 
-void scar_pax_meta_init_file(struct scar_pax_meta *meta, char *path, uint64_t size)
-{
+void scar_pax_meta_init_file(
+	struct scar_pax_meta *meta, char *path, uint64_t size
+) {
 	scar_pax_meta_init_empty(meta);
 	meta->type = SCAR_FT_FILE;
 	meta->path = dupstr(path);
@@ -164,23 +165,65 @@ void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	scar_io_printf(w, "Metadata{\n");
 	scar_io_printf(w, "\ttype: %c\n", scar_pax_filetype_to_char(meta->type));
 
-	if (~meta->mode) scar_io_printf(w, "\tmode: 0%03" PRIu32 "\n", meta->mode);
-	if (~meta->devmajor) scar_io_printf(w, "\tdevmajor: %" PRIu32 "\n", meta->devmajor);
-	if (~meta->devminor) scar_io_printf(w, "\tdevminor: %" PRIu32 "\n", meta->devminor);
+	if (~meta->mode) {
+		scar_io_printf(w, "\tmode: 0%03" PRIu32 "\n", meta->mode);
+	}
 
-	if (!isnan(meta->atime)) scar_io_printf(w, "\tatime: %f\n", meta->atime);
-	if (meta->charset) scar_io_printf(w, "\tcharset: %s\n", meta->charset);
-	if (meta->comment) scar_io_printf(w, "\tcomment: %s\n", meta->comment);
+	if (~meta->devmajor) {
+		scar_io_printf(w, "\tdevmajor: %" PRIu32 "\n", meta->devmajor);
+	}
 
-	if (~meta->gid) scar_io_printf(w, "\tgid: %" PRIu64 "\n", meta->gid);
-	if (meta->gname) scar_io_printf(w, "\tgname: %s\n", meta->gname);
-	if (meta->hdrcharset) scar_io_printf(w, "\thdrcharset: %s\n", meta->hdrcharset);
-	if (meta->linkpath) scar_io_printf(w, "\tlinkpath: %s\n", meta->linkpath);
-	if (!isnan(meta->mtime)) scar_io_printf(w, "\tmtime: %f\n", meta->mtime);
-	if (meta->path) scar_io_printf(w, "\tpath: %s\n", meta->path);
-	if (~meta->size) scar_io_printf(w, "\tsize: %" PRIu64 "\n", meta->size);
-	if (~meta->uid) scar_io_printf(w, "\tuid: %" PRIu64 "\n", meta->uid);
-	if (meta->uname) scar_io_printf(w, "\tuname: %s\n", meta->uname);
+	if (~meta->devminor) {
+		scar_io_printf(w, "\tdevminor: %" PRIu32 "\n", meta->devminor);
+	}
+
+	if (!isnan(meta->atime)) {
+		scar_io_printf(w, "\tatime: %f\n", meta->atime);
+	}
+
+	if (meta->charset) {
+		scar_io_printf(w, "\tcharset: %s\n", meta->charset);
+	}
+
+	if (meta->comment) {
+		scar_io_printf(w, "\tcomment: %s\n", meta->comment);
+	}
+
+	if (~meta->gid) {
+		scar_io_printf(w, "\tgid: %" PRIu64 "\n", meta->gid);
+	}
+
+	if (meta->gname) {
+		scar_io_printf(w, "\tgname: %s\n", meta->gname);
+	}
+
+	if (meta->hdrcharset) {
+		scar_io_printf(w, "\thdrcharset: %s\n", meta->hdrcharset);
+	}
+
+	if (meta->linkpath) {
+		scar_io_printf(w, "\tlinkpath: %s\n", meta->linkpath);
+	}
+
+	if (!isnan(meta->mtime)) {
+		scar_io_printf(w, "\tmtime: %f\n", meta->mtime);
+	}
+
+	if (meta->path) {
+		scar_io_printf(w, "\tpath: %s\n", meta->path);
+	}
+
+	if (~meta->size) {
+		scar_io_printf(w, "\tsize: %" PRIu64 "\n", meta->size);
+	}
+
+	if (~meta->uid) {
+		scar_io_printf(w, "\tuid: %" PRIu64 "\n", meta->uid);
+	}
+
+	if (meta->uname) {
+		scar_io_printf(w, "\tuname: %s\n", meta->uname);
+	}
 
 	scar_io_printf(w, "}\n");
 }

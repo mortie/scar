@@ -1,19 +1,20 @@
 #ifndef SCAR_IOUTIL_H
 #define SCAR_IOUTIL_H
 
-#include "io.h"
-#include "types.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
+
+#include "io.h"
+#include "types.h"
 
 /// Print text to a stream, formatted using printf-style formatting.
 /// Returns the number of bytes written, or -1 on error.
 scar_ssize scar_io_printf(struct scar_io_writer *w, const char *fmt, ...)
 	__attribute__((format(printf, 2, 3)));
 
-/// Print text to a stream, formatted using printf-style formatting, using a va_list.
+/// Print text to a stream, formatted using printf-style formatting,
+/// using a va_list.
 /// Returns the number of bytes written, or -1 on error.
 scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap);
 
@@ -36,7 +37,8 @@ int scar_file_handle_seek(
 	struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence);
 scar_offset scar_file_handle_tell(struct scar_io_seeker *s);
 
-/// An in-memory buffer which can be read from as a reader and seeked as a seeker.
+/// An in-memory buffer which can be read from as a reader
+/// and seeked as a seeker.
 struct scar_mem_reader {
 	struct scar_io_reader r;
 	struct scar_io_seeker s;
@@ -45,8 +47,10 @@ struct scar_mem_reader {
 	size_t pos;
 };
 
-void scar_mem_reader_init(struct scar_mem_reader *mr, const void *buf, size_t len);
-scar_ssize scar_mem_reader_read(struct scar_io_reader *r, void *buf, size_t len);
+void scar_mem_reader_init(
+	struct scar_mem_reader *mr, const void *buf, size_t len);
+scar_ssize scar_mem_reader_read(
+	struct scar_io_reader *r, void *buf, size_t len);
 int scar_mem_reader_seek(
 	struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence);
 scar_offset scar_mem_reader_tell(struct scar_io_seeker *s);
@@ -60,7 +64,8 @@ struct scar_mem_writer {
 };
 
 void scar_mem_writer_init(struct scar_mem_writer *mw);
-scar_ssize scar_mem_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
+scar_ssize scar_mem_writer_write(
+	struct scar_io_writer *w, const void *buf, size_t len);
 int scar_mem_writer_put(struct scar_mem_writer *mw, unsigned char ch);
 void *scar_mem_writer_get_buffer(struct scar_mem_writer *mw, size_t len);
 
@@ -71,8 +76,10 @@ struct scar_counting_writer {
 	scar_offset count;
 };
 
-void scar_counting_writer_init(struct scar_counting_writer *cw, struct scar_io_writer *w);
-scar_ssize scar_counting_writer_write(struct scar_io_writer *w, const void *buf, size_t len);
+void scar_counting_writer_init(
+	struct scar_counting_writer *cw, struct scar_io_writer *w);
+scar_ssize scar_counting_writer_write(
+	struct scar_io_writer *w, const void *buf, size_t len);
 
 /// A reader wrapper which counts the number of bytes read.
 struct scar_counting_reader {
@@ -81,8 +88,10 @@ struct scar_counting_reader {
 	scar_offset count;
 };
 
-void scar_counting_reader_init(struct scar_counting_reader *cr, struct scar_io_reader *r);
-scar_ssize scar_counting_reader_read(struct scar_io_reader *r, void *buf, size_t len);
+void scar_counting_reader_init(
+	struct scar_counting_reader *cr, struct scar_io_reader *r);
+scar_ssize scar_counting_reader_read(
+	struct scar_io_reader *r, void *buf, size_t len);
 
 /// A reader wrapper which limits the number of bytes read.
 struct scar_limited_reader {
@@ -92,8 +101,10 @@ struct scar_limited_reader {
 };
 
 void scar_limited_reader_init(
-	struct scar_limited_reader *lr, struct scar_io_reader *r, scar_offset limit);
-scar_ssize scar_limited_reader_read(struct scar_io_reader *r, void *buf, size_t len);
+	struct scar_limited_reader *lr, struct scar_io_reader *r,
+	scar_offset limit);
+scar_ssize scar_limited_reader_read(
+	struct scar_io_reader *r, void *buf, size_t len);
 
 /// A wrapper around a reader which reads 512-byte blocks
 struct scar_block_reader {

@@ -1,12 +1,13 @@
 #define _POSIX_C_SOURCE 200112L
 
-#include <scar/pax.h>
-#include <scar/compression.h>
-#include <scar/scar-writer.h>
+#include "../subcmds.h"
+
 #include <stdio.h>
 #include <unistd.h>
 
-#include "../subcmds.h"
+#include <scar/pax.h>
+#include <scar/compression.h>
+#include <scar/scar-writer.h>
 
 int cmd_convert(struct args *args, char **argv, int argc)
 {

@@ -21,7 +21,8 @@ static int suffix_match(
 		return 0;
 	}
 
-	unsigned char *heystack_ptr = (unsigned char *)heystack + (heystack_len - needle_len);
+	unsigned char *heystack_ptr =
+		(unsigned char *)heystack + (heystack_len - needle_len);
 	return memcmp(heystack_ptr, needle, needle_len) == 0;
 }
 
@@ -29,7 +30,9 @@ bool scar_compression_init_from_tail(
 	struct scar_compression *comp, void *buf, size_t len
 ) {
 	scar_compression_init_gzip(comp);
-	if (suffix_match(buf, (size_t)len, comp->eof_marker, comp->eof_marker_len)) {
+	if (suffix_match(
+		buf, (size_t)len, comp->eof_marker, comp->eof_marker_len)
+	) {
 		return true;
 	}
 

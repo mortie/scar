@@ -1,10 +1,10 @@
 #include "compression.h"
 
-#include "ioutil.h"
-#include "test.h"
-
 #include <string.h>
 #include <stdlib.h>
+
+#include "ioutil.h"
+#include "test.h"
 
 TEST(compress)
 {
@@ -146,7 +146,8 @@ TEST(decompress)
 	struct scar_decompressor *decompressor = gzip.create_decompressor(&mr.r);
 
 	char decbuf[512];
-	scar_ssize r = decompressor->r.read(&decompressor->r, decbuf, sizeof(decbuf));
+	scar_ssize r =
+		decompressor->r.read(&decompressor->r, decbuf, sizeof(decbuf));
 	ASSERT2(r, ==, (scar_ssize)sizeof(data) - 1);
 	ASSERT2(memcmp(decbuf, data, sizeof(data) - 1), ==, 0);
 
@@ -182,4 +183,6 @@ TEST(decompress_chunked)
 	OK();
 }
 
-TESTGROUP(compression_gzip, compress, compress_chunked, decompress, decompress_chunked);
+TESTGROUP(
+	compression_gzip,
+	compress, compress_chunked, decompress, decompress_chunked);

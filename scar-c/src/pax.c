@@ -1,17 +1,18 @@
 #include "pax.h"
 
-#include "ioutil.h"
-#include "pax-syntax.h"
-#include "ustar.h"
-#include "internal-util.h"
-
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
 
-static int read_bytes_block_aligned(void *buf, size_t size, struct scar_io_reader *r)
-{
+#include "ioutil.h"
+#include "pax-syntax.h"
+#include "ustar.h"
+#include "internal-util.h"
+
+static int read_bytes_block_aligned(
+	void *buf, size_t size, struct scar_io_reader *r
+) {
 	unsigned char block[512];
 
 	uint64_t aligned = 0;
@@ -239,8 +240,8 @@ int scar_pax_read_meta(
 		}
 
 		// Anything else should be a valid scar_pax_filetype.
-		// That means we reached the header block for the actual file entry we're
-		// interested in.
+		// That means we reached the header block for the actual file entry
+		// we're interested in.
 		else {
 			break;
 		}
@@ -381,7 +382,8 @@ static int pax_write_time(struct scar_mem_writer *mw, char *name, double time)
 	int64_t nanos = (int64_t)round((time - (double)seconds) * 1000000000.0);
 
 	// We'll be writing the number in reverse into buf.
-	// Due to the 64-bit integer part and the nanosecond precision fractional part,
+	// Due to the 64-bit integer part and the nanosecond precision
+	// fractional part,
 	// the numbers can take up to 21 bytes,
 	// so this 32-byte buffer should be more than enough.
 	// That means we can ignore size checks when writing to it.
@@ -390,7 +392,8 @@ static int pax_write_time(struct scar_mem_writer *mw, char *name, double time)
 	// We will be writing to bufptr.
 	// Initialize it to point to one past the end of the array,
 	// then write to it using '*(--bufptr)'.
-	// That means bufptr will always point to the first character in our number.
+	// That means bufptr will always point to the first character
+	// in our number.
 	char *bufptr = &buf[sizeof(buf)];
 
 	// Let most of this function not care about negatives,
@@ -456,7 +459,9 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	scar_mem_writer_init(&paxhdr);
 
 	if (!isnan(meta->atime)) {
-		if (pax_write_time(&paxhdr, "atime", meta->atime) < 0) SCAR_ERETURN(-1);
+		if (pax_write_time(&paxhdr, "atime", meta->atime) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (meta->charset) {
@@ -476,15 +481,21 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	}
 
 	if (meta->gname && strlen(meta->gname) > 32) {
-		if (pax_write_string(&paxhdr, "gname", meta->gname) < 0) SCAR_ERETURN(-1);
+		if (pax_write_string(&paxhdr, "gname", meta->gname) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (meta->hdrcharset) {
-		if (pax_write_string(&paxhdr, "hdrcharset", meta->hdrcharset) < 0) SCAR_ERETURN(-1);
+		if (pax_write_string(&paxhdr, "hdrcharset", meta->hdrcharset) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (meta->linkpath && strlen(meta->linkpath) > 100) {
-		if (pax_write_string(&paxhdr, "linkpath", meta->linkpath) < 0) SCAR_ERETURN(-1);
+		if (pax_write_string(&paxhdr, "linkpath", meta->linkpath) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (!isnan(meta->mtime) && (
@@ -492,23 +503,33 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 		meta->mtime > 0777777777777ll ||
 		meta->mtime != floor(meta->mtime))
 	) {
-		if (pax_write_time(&paxhdr, "mtime", meta->mtime) < 0) SCAR_ERETURN(-1);
+		if (pax_write_time(&paxhdr, "mtime", meta->mtime) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (meta->path && strlen(meta->path) > 100) {
-		if (pax_write_string(&paxhdr, "path", meta->path) < 0) SCAR_ERETURN(-1);
+		if (pax_write_string(&paxhdr, "path", meta->path) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (~meta->size && meta->size > 077777777777ll) {
-		if (pax_write_uint(&paxhdr, "size", meta->size) < 0) SCAR_ERETURN(-1);
+		if (pax_write_uint(&paxhdr, "size", meta->size) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (~meta->uid && meta->uid > 07777777ll) {
-		if (pax_write_uint(&paxhdr, "uid", meta->uid) < 0) SCAR_ERETURN(-1);
+		if (pax_write_uint(&paxhdr, "uid", meta->uid) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	if (meta->uname && strlen(meta->uname) > 32) {
-		if (pax_write_string(&paxhdr, "uname", meta->uname) < 0) SCAR_ERETURN(-1);
+		if (pax_write_string(&paxhdr, "uname", meta->uname) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
 	// Write a pax extended metadata entry if necessary
@@ -526,8 +547,8 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 			SCAR_ERETURN(-1);
 		}
 
-		// Reset the block to 0s, both to re-use it for the header for the next entry,
-		// and to use it for padding
+		// Reset the block to 0s, both to re-use it for the header
+		// for the next entry, and to use it for padding
 		memset(block, 0, 512);
 
 		size_t padding = 512 - (paxhdr.len % 512);
@@ -543,8 +564,11 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 	block_write_u64(block, SCAR_UST_UID, meta->uid);
 	block_write_u64(block, SCAR_UST_GID, meta->gid);
 	block_write_u64(block, SCAR_UST_SIZE, meta->size);
-	block_write_u64(block, SCAR_UST_MTIME, meta->mtime > 0 ? (uint64_t)meta->mtime : 0);
-	block[SCAR_UST_TYPEFLAG.start] = (unsigned char)scar_pax_filetype_to_char(meta->type);
+	block_write_u64(
+		block, SCAR_UST_MTIME,
+		meta->mtime > 0 ? (uint64_t)meta->mtime : 0);
+	block[SCAR_UST_TYPEFLAG.start] =
+		(unsigned char)scar_pax_filetype_to_char(meta->type);
 	block_write_string(block, SCAR_UST_LINKNAME, meta->linkpath);
 	memcpy(&block[SCAR_UST_MAGIC.start], "ustar", 6);
 	memcpy(&block[SCAR_UST_VERSION.start], "00", 2);

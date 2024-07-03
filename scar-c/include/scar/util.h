@@ -13,7 +13,8 @@
 /// struct foobar fb = { 10, 20 };
 /// int *y = &fb.y;
 ///
-/// You can turn the 'y' pointer into a pointer to its containing 'struct foobar' like this:
+/// You can turn the 'y' pointer into a pointer to its containing
+/// 'struct foobar' like this:
 ///
 /// struct foobar *fb = SCAR_BASE(struct foobar, y)
 ///

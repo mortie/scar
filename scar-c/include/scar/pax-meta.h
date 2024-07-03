@@ -1,9 +1,9 @@
 #ifndef SCAR_PAX_META_H
 #define SCAR_PAX_META_H
 
-#include "io.h"
-
 #include <stdint.h>
+
+#include "io.h"
 
 /// The scar_pax_filetype enum represents the possible archive entry types in a pax archive.
 enum scar_pax_filetype {

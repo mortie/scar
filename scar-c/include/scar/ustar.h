@@ -1,9 +1,9 @@
 #ifndef SCAR_USTAR_FIELDS_H
 #define SCAR_USTAR_FIELDS_H
 
-#include "io.h"
-
 #include <stddef.h>
+
+#include "io.h"
 
 struct scar_ustar_field {
 	size_t start;

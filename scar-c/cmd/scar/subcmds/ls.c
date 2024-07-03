@@ -1,9 +1,11 @@
-#include <scar/pax.h>
-#include <scar/scar-reader.h>
+#include "../subcmds.h"
+
 #include <stdio.h>
 
+#include <scar/pax.h>
+#include <scar/scar-reader.h>
+
 #include "../rx.h"
-#include "../subcmds.h"
 
 int cmd_ls(struct args *args, char **argv, int argc)
 {

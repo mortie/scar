@@ -1,11 +1,11 @@
 #include "ioutil.h"
 
-#include "util.h"
-#include "internal-util.h"
-
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "util.h"
+#include "internal-util.h"
 
 //
 // Utility functions
@@ -20,8 +20,9 @@ scar_ssize scar_io_printf(struct scar_io_writer *w, const char *fmt, ...)
 	return ret;
 }
 
-scar_ssize scar_io_vprintf(struct scar_io_writer *w, const char *fmt, va_list ap)
-{
+scar_ssize scar_io_vprintf(
+	struct scar_io_writer *w, const char *fmt, va_list ap
+) {
 	char buf[128];
 	int n = vsnprintf(buf, sizeof(buf), fmt, ap);
 	if (n < 0) {
@@ -56,8 +57,9 @@ void scar_file_handle_init(struct scar_file_handle *r, FILE *f)
 	r->f = f;
 }
 
-scar_ssize scar_file_handle_read(struct scar_io_reader *r, void *buf, size_t len)
-{
+scar_ssize scar_file_handle_read(
+	struct scar_io_reader *r, void *buf, size_t len
+) {
 	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, r);
 	size_t n = fread(buf, 1, len, sf->f);
 	if (n == 0 && ferror(sf->f)) {
@@ -103,8 +105,9 @@ scar_offset scar_file_handle_tell(struct scar_io_seeker *s)
 // scar_mem_reader
 //
 
-void scar_mem_reader_init(struct scar_mem_reader *mr, const void *buf, size_t len)
-{
+void scar_mem_reader_init(
+	struct scar_mem_reader *mr, const void *buf, size_t len
+) {
 	mr->r.read = scar_mem_reader_read;
 	mr->s.seek = scar_mem_reader_seek;
 	mr->s.tell = scar_mem_reader_tell;
@@ -113,8 +116,9 @@ void scar_mem_reader_init(struct scar_mem_reader *mr, const void *buf, size_t le
 	mr->pos = 0;
 }
 
-scar_ssize scar_mem_reader_read(struct scar_io_reader *r, void *buf, size_t len)
-{
+scar_ssize scar_mem_reader_read(
+	struct scar_io_reader *r, void *buf, size_t len
+) {
 	struct scar_mem_reader *mr = SCAR_BASE(struct scar_mem_reader, r);
 	if (mr->pos >= mr->len) {
 		return 0;
@@ -248,7 +252,8 @@ void scar_counting_writer_init(
 scar_ssize scar_counting_writer_write(
 	struct scar_io_writer *w, const void *buf, size_t len
 ) {
-	struct scar_counting_writer *cw = SCAR_BASE(struct scar_counting_writer, w);
+	struct scar_counting_writer *cw =
+		SCAR_BASE(struct scar_counting_writer, w);
 	scar_ssize count = cw->backing_w->write(cw->backing_w, buf, len);
 	if (count > 0) {
 		cw->count += count;
@@ -272,7 +277,8 @@ void scar_counting_reader_init(
 scar_ssize scar_counting_reader_read(
 	struct scar_io_reader *r, void *buf, size_t len
 ) {
-	struct scar_counting_reader *cr = SCAR_BASE(struct scar_counting_reader, r);
+	struct scar_counting_reader *cr =
+		SCAR_BASE(struct scar_counting_reader, r);
 	scar_ssize count = cr->backing_r->read(cr->backing_r, buf, len);
 	if (count > 0) {
 		cr->count += count;

@@ -1,7 +1,8 @@
-#include <scar/scar-reader.h>
+#include "../subcmds.h"
+
 #include <stdio.h>
 
-#include "../subcmds.h"
+#include <scar/scar-reader.h>
 
 int cmd_tree(struct args *args, char **argv, int argc)
 {

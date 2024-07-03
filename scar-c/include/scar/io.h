@@ -26,9 +26,12 @@ struct scar_io_writer {
 /// Abstract seeker style type which allows seeking to a different place in a stream.
 struct scar_io_seeker {
 	/// Seek to 'offset' relative to the position given by 'whence'.
-	/// If 'whence' is SCAR_SEEK_START, 'offset' is relative to the start of the stream.
-	/// If 'whence' is SCAR_SEEK_CURRENT' 'offset' is relative to the current position.
-	/// If 'whence' is SCAR_SEEK_END, 'offset' is relative to the end of the stream.
+	/// If 'whence' is SCAR_SEEK_START, 'offset' is relative to
+	/// the start of the stream.
+	/// If 'whence' is SCAR_SEEK_CURRENT' 'offset' is relative to
+	/// the current position.
+	/// If 'whence' is SCAR_SEEK_END, 'offset' is relative to
+	/// the end of the stream.
 	/// Return 0 on success, or -1 on error.
 	int (*seek)(struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence);
 

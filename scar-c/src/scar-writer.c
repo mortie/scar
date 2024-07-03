@@ -1,10 +1,10 @@
 #include "scar-writer.h"
 
+#include <stdlib.h>
+
 #include "ioutil.h"
 #include "internal-util.h"
 #include "pax.h"
-
-#include <stdlib.h>
 
 struct scar_writer {
 	int clevel;
@@ -35,7 +35,8 @@ struct scar_writer *scar_writer_create(
 	sw->last_checkpoint_uncompressed_offset = 0;
 
 	scar_counting_writer_init(&sw->compressed_writer, w);
-	sw->compressor = sw->comp->create_compressor(&sw->compressed_writer.w, clevel);
+	sw->compressor =
+		sw->comp->create_compressor(&sw->compressed_writer.w, clevel);
 	if (!sw->compressor) {
 		free(sw);
 		SCAR_ERETURN(NULL);
@@ -43,7 +44,8 @@ struct scar_writer *scar_writer_create(
 	scar_counting_writer_init(&sw->uncompressed_writer, &sw->compressor->w);
 
 	scar_mem_writer_init(&sw->index_buf);
-	sw->index_compressor = sw->comp->create_compressor(&sw->index_buf.w, clevel);
+	sw->index_compressor =
+		sw->comp->create_compressor(&sw->index_buf.w, clevel);
 	if (!sw->index_compressor) {
 		comp->destroy_compressor(sw->compressor);
 		free(sw);
@@ -67,7 +69,9 @@ struct scar_writer *scar_writer_create(
 		SCAR_ERETURN(NULL);
 	}
 
-	if (scar_io_printf(&sw->checkpoints_compressor->w, "SCAR-CHECKPOINTS\n") < 0) {
+	if (scar_io_printf(
+		&sw->checkpoints_compressor->w, "SCAR-CHECKPOINTS\n") < 0
+	) {
 		comp->destroy_compressor(sw->compressor);
 		comp->destroy_compressor(sw->index_compressor);
 		comp->destroy_compressor(sw->checkpoints_compressor);
@@ -99,8 +103,9 @@ static int create_checkpoint(struct scar_writer *sw)
 }
 
 int scar_writer_write_entry(
-	struct scar_writer *sw, struct scar_pax_meta *meta, struct scar_io_reader *r)
-{
+	struct scar_writer *sw, struct scar_pax_meta *meta,
+	struct scar_io_reader *r
+) {
 	scar_ssize ret;
 
 	const int limit = 10 * 1024 * 1024;
@@ -173,7 +178,8 @@ int scar_writer_finish(struct scar_writer *sw)
 		index_compressed_offset + (scar_offset)sw->index_buf.len;
 
 	// We don't need to count anymore,
-	// so we'll just directly use the backing writer for the compressed stream from now on
+	// so we'll just directly use the backing writer
+	// for the compressed stream from now on
 	struct scar_io_writer *w = sw->compressed_writer.backing_w;
 
 	ret = w->write(w, sw->index_buf.buf, sw->index_buf.len);

@@ -1,13 +1,13 @@
 #include "scar-reader.h"
 
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+
 #include "internal-util.h"
 #include "compression.h"
 #include "ioutil.h"
 #include "types.h"
-
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>
 
 struct scar_reader {
 	struct scar_io_reader *raw_r;
@@ -147,7 +147,8 @@ struct scar_reader *scar_reader_create(
 		SCAR_ERETURN(NULL);
 	}
 
-	// Find the correct compression, based on a suffix match of the scar-end section
+	// Find the correct compression, based on a suffix match of
+	// the scar-end section
 	if (!scar_compression_init_from_tail(
 		&sr->comp, end_block, (size_t)end_block_len)
 	) {
@@ -155,7 +156,8 @@ struct scar_reader *scar_reader_create(
 		SCAR_ERETURN(NULL);
 	}
 
-	// Now, find the tail, and populate the offsets to the index and the checkpoints
+	// Now, find the tail, and populate the offsets to
+	// the index and the checkpoints
 	if (find_tail(sr, end_block, (size_t)end_block_len - sr->comp.eof_marker_len) < 0) {
 		free(sr);
 		SCAR_ERETURN(NULL);
