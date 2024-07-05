@@ -1,6 +1,5 @@
 #include "ioutil.h"
 
-#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,6 +41,29 @@ scar_ssize scar_io_vprintf(
 scar_ssize scar_io_puts(struct scar_io_writer *w, const char *str)
 {
 	return w->write(w, str, strlen(str));
+}
+
+scar_ssize scar_io_copy(struct scar_io_reader *r, struct scar_io_writer *w)
+{
+	scar_ssize count = 0;
+	char buf[512];
+	while (1) {
+		scar_ssize nr = r->read(r, buf, sizeof(buf));
+		if (nr < 0) {
+			return nr;
+		} else if (nr == 0) {
+			return count;
+		}
+
+		scar_ssize nw = w->write(w, buf, nr);
+		if (nw < 0) {
+			return nw;
+		} else if (nw < nr) {
+			return -1;
+		}
+
+		count += nw;
+	}
 }
 
 //

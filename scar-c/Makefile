@@ -35,6 +35,10 @@ check-lldb: $(OUT)/test-scar
 check-gdb: $(OUT)/test-scar
 	gdb -ex 'break scar_breakpoint' -ex 'run' $<
 
+.PHONY: check-valgrind
+check-valgrind: $(OUT)/test-scar
+	valgrind --leak-check=full $<
+
 .PHONY: clean
 clean:
 	$(NINJA) -C build clean

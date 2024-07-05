@@ -77,4 +77,9 @@ int main(void)
 #undef X
 
 	printf("\n# %i/%i tests succeeded.\n", numsuccess, numtests);
+	if (numsuccess == numtests) {
+		return 0;
+	} else {
+		return 1;
+	}
 }

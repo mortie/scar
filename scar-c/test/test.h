@@ -69,7 +69,7 @@ struct scar_test_group name ## __test_group = { \
 #ifdef HAS_TYPEOF
 /// ASSERT2(a, op, b) is the same as ASSERT(a op b),
 /// except that the operands 'a' and 'b' are defined as the variables 'op_a' and 'op_b'.
-/// This 
+/// This allows inspecting the two sides with gdb/lldb.
 #define ASSERT2(a, op, b) do { \
 	TYPEOF(a) op_a = a; \
 	TYPEOF(b) op_b = b; \
