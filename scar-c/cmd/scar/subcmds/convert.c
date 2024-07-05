@@ -33,6 +33,7 @@ int cmd_convert(struct args *args, char **argv, int argc)
 
 	scar_pax_meta_init_empty(&global);
 	while (1) {
+		scar_pax_meta_destroy(&meta);
 		int r = scar_pax_read_meta(&global, &meta, &args->input.r);
 		if (r < 0) {
 			goto err;
