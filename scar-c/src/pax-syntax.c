@@ -175,12 +175,10 @@ static int parse_one(struct scar_pax_meta *meta, struct scar_block_reader *br) {
 	}
 
 	if (ret < 0) {
-		printf("hey returning -1 because ret < 0\n");
-		return ret;
+		SCAR_ERETURN(ret);
 	}
 
 	if (br->next != '\n') {
-		printf("hey returning -1 because aaa\n");
 		SCAR_ERETURN(-1);
 	}
 
