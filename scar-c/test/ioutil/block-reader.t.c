@@ -15,13 +15,12 @@ TEST(repeated_consume) {
 	scar_block_reader_init(&br, &mr.r);
 
 	for (size_t i = 0; i < sizeof(text); ++i) {
-		ASSERT(!br.eof);
 		ASSERT(!br.error);
 		ASSERT(br.next == text[i]);
 		scar_block_reader_consume(&br);
 	}
 
-	ASSERT(br.eof);
+	ASSERT(br.next == EOF);
 	ASSERT(!br.error);
 
 	OK();

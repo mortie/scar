@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "pax-meta.h"
 #include "ioutil.h"
 #include "pax-syntax.h"
 #include "ustar.h"

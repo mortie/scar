@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-#include "io.h"
-#include "pax-meta.h"
+struct scar_io_reader;
+struct scar_io_writer;
+struct scar_pax_meta;
 
 /// Read all the metadata for the next pax entry.
 /// 'global' is expected to be initialized, and will be overwritten

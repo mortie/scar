@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "io.h"
 #include "types.h"
@@ -111,9 +112,9 @@ scar_ssize scar_limited_reader_read(
 
 /// A wrapper around a reader which reads 512-byte blocks
 struct scar_block_reader {
-	struct scar_io_reader *r;
+	struct scar_io_reader r;
+	struct scar_io_reader *backing_r;
 	int next;
-	int eof;
 	int error;
 
 	int index;
@@ -125,6 +126,7 @@ void scar_block_reader_init(
 	struct scar_block_reader *br, struct scar_io_reader *r);
 void scar_block_reader_consume(struct scar_block_reader *br);
 int scar_block_reader_skip(struct scar_block_reader *br, size_t n);
-int scar_block_reader_read(struct scar_block_reader *br, void *buf, size_t n);
+scar_ssize scar_block_reader_read(
+	struct scar_io_reader *r, void *buf, size_t n);
 
 #endif

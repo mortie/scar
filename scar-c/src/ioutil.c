@@ -348,34 +348,33 @@ scar_ssize scar_limited_reader_read(
 void scar_block_reader_init(
 	struct scar_block_reader *br, struct scar_io_reader *r
 ) {
-	br->r = r;
+	br->r.read = scar_block_reader_read;
+	br->backing_r = r;
 	br->index = 0;
 	br->bufcap = 0;
 
 	scar_ssize n = r->read(r, br->block, sizeof(br->block));
 	if (n < 1) {
 		br->next = EOF;
-		br->eof = 1;
 		br->error = (int)n;
 	} else {
 		br->bufcap = (int)n;
 		br->next = br->block[br->index++];
-		br->eof = 0;
 		br->error = 0;
 	}
 }
 
 void scar_block_reader_consume(struct scar_block_reader *br)
 {
-	if (br->eof) {
+	if (br->next == EOF) {
 		return;
 	}
 
 	if (br->index >= br->bufcap) {
-		scar_ssize n = br->r->read(br->r, br->block, sizeof(br->block));
+		scar_ssize n = br->backing_r->read(
+			br->backing_r, br->block, sizeof(br->block));
 		if (n < 1) {
 			br->next = EOF;
-			br->eof = 1;
 			br->error = (int)n;
 		} else {
 			br->index = 0;
@@ -404,21 +403,25 @@ int scar_block_reader_skip(struct scar_block_reader *br, size_t n)
 	return 0;
 }
 
-int scar_block_reader_read(struct scar_block_reader *br, void *buf, size_t n)
+scar_ssize scar_block_reader_read(struct scar_io_reader *r, void *buf, size_t n)
 {
+	struct scar_block_reader *br = SCAR_BASE(struct scar_block_reader, r);
+
+	scar_ssize ret = 0;
+
 	// This could also be faster...
 	unsigned char *cbuf = (unsigned char *)buf;
-	while (n > 0) {
+	while (ret < (scar_ssize)n) {
 		if (br->next == EOF) {
-			SCAR_ERETURN(-1);
+			return ret;
 		}
 
 		*cbuf = (unsigned char)br->next;
 		cbuf += 1;
 
 		scar_block_reader_consume(br);
-		n -= 1;
+		ret += 1;
 	}
 
-	return 0;
+	return ret;
 }

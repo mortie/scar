@@ -6,6 +6,7 @@
 
 #include "internal-util.h"
 #include "ioutil.h"
+#include "pax-meta.h"
 
 static int parse_time(struct scar_block_reader *br, size_t size, double *num)
 {
@@ -72,7 +73,7 @@ static int scar_parse_string(
 		SCAR_ERETURN(-1);
 	}
 
-	if (scar_block_reader_read(br, buf, size) < 0) {
+	if (scar_block_reader_read(&br->r, buf, size) < 0) {
 		free(buf);
 		SCAR_ERETURN(-1);
 	}

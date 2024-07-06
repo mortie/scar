@@ -4,6 +4,7 @@
 
 #include "ioutil.h"
 #include "test.h"
+#include "pax-meta.h"
 
 TEST(basic_parsing)
 {

@@ -8,6 +8,7 @@
 #include "compression.h"
 #include "ioutil.h"
 #include "types.h"
+#include "pax-syntax.h"
 
 struct scar_reader {
 	struct scar_io_reader *raw_r;
@@ -27,6 +28,7 @@ struct scar_index_iterator {
 	struct scar_counting_reader counter;
 	scar_offset next_offset;
 	struct scar_io_seeker *seeker;
+	struct scar_pax_meta global;
 };
 
 // Returns 1 if the tail was successfully parsed, 0 if not,
@@ -178,6 +180,8 @@ struct scar_index_iterator *scar_reader_iterate(struct scar_reader *sr)
 		return NULL;
 	}
 
+	scar_pax_meta_init_empty(&it->global);
+
 	it->seeker = sr->raw_s;
 	if (it->seeker->seek(it->seeker, sr->index_offset, SCAR_SEEK_START) < 0) {
 		scar_index_iterator_free(it);
@@ -195,7 +199,7 @@ struct scar_index_iterator *scar_reader_iterate(struct scar_reader *sr)
 	const size_t head_len = strlen(head);
 	size_t remaining = head_len;
 	while (remaining > 0) {
-		if (it->br.eof) {
+		if (it->br.next == EOF) {
 			scar_index_iterator_free(it);
 			SCAR_ERETURN(NULL);
 		}
@@ -225,6 +229,7 @@ int scar_index_iterator_next(
 	struct scar_index_iterator *it,
 	struct scar_index_entry *entry
 ) {
+start:
 	if (it->br.next < '0' || it->br.next > '9') {
 		return 0;
 	}
@@ -257,7 +262,14 @@ int scar_index_iterator_next(
 	scar_block_reader_consume(&it->br); // ' '
 	remaining -= 1;
 
-	entry->ft = scar_pax_filetype_from_char(it->br.next);
+	if (remaining < 0) {
+		SCAR_ERETURN(-1);
+	}
+
+	// The next character is the type of the entry.
+	// However, we don't convert it to a scar_pax_filetype just yet:
+	// it might be a 'g', which needs special consideration.
+	char ft = it->br.next;
 	scar_block_reader_consume(&it->br); // type
 	remaining -= 1;
 
@@ -290,13 +302,27 @@ int scar_index_iterator_next(
 	scar_block_reader_consume(&it->br); // ' '
 	remaining -= 1;
 
-	if (remaining < 1) {
+	if (remaining <= 1) {
 		SCAR_ERETURN(-1);
 	}
 
+	if (ft == 'g') {
+		if (scar_pax_parse(&it->global, &it->br.r, remaining) < 0) {
+			SCAR_ERETURN(-1);
+		}
+
+		// We would do 'return scar_index_iterator_next(it, entry)' here
+		// if tail recursion was guaranteed,
+		// but it's not, and we wanna avoid blowing the stack.
+		// So this 'goto' is used as manual guaranteed tail recursion.
+		goto start;
+	}
+
+	entry->ft = scar_pax_filetype_from_char(ft);
+
 	it->buf.len = 0;
 	while (remaining > 1) {
-		if (it->br.eof) {
+		if (it->br.next == EOF) {
 			SCAR_ERETURN(-1);
 		}
 
