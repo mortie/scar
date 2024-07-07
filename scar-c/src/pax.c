@@ -159,8 +159,8 @@ static char *block_read_path(
 }
 
 int scar_pax_read_meta(
-	struct scar_meta *global, struct scar_meta *meta,
-	struct scar_io_reader *r
+	struct scar_io_reader *r,
+	struct scar_meta *global, struct scar_meta *meta
 ) {
 	unsigned char block[512];
 	char ftype;
@@ -452,7 +452,8 @@ static int pax_write_uint(struct scar_mem_writer *mw, char *name, uint64_t num)
 	return pax_write_field(mw, name, buf, (size_t)n);
 }
 
-int scar_pax_write_meta(struct scar_meta *meta, struct scar_io_writer *w)
+int scar_pax_write_meta(
+	const struct scar_meta *meta, struct scar_io_writer *w)
 {
 	unsigned char block[512] = {0};
 

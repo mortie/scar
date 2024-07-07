@@ -10,7 +10,7 @@
 int cmd_convert(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
-	struct scar_meta global = {0};
+	struct scar_meta global;
 	struct scar_meta meta = {0};
 	struct scar_writer *sw = NULL;
 
@@ -33,8 +33,7 @@ int cmd_convert(struct args *args, char **argv, int argc)
 
 	scar_meta_init_empty(&global);
 	while (1) {
-		scar_meta_destroy(&meta);
-		int r = scar_pax_read_meta(&global, &meta, &args->input.r);
+		int r = scar_pax_read_meta(&args->input.r, &global, &meta);
 		if (r < 0) {
 			goto err;
 		} else if (r == 0) {
@@ -45,6 +44,8 @@ int cmd_convert(struct args *args, char **argv, int argc)
 			fprintf(stderr, "Failed to write SCAR entry\n");
 			goto err;
 		}
+
+		scar_meta_destroy(&meta);
 	}
 
 	if (scar_writer_finish(sw) < 0) {

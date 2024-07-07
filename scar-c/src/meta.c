@@ -7,6 +7,25 @@
 
 #include "ioutil.h"
 
+static const struct scar_meta empty_meta = {
+	.type = SCAR_FT_UNKNOWN,
+	.mode = ~(uint32_t)0,
+	.devmajor = ~(uint32_t)0,
+	.devminor = ~(uint32_t)0,
+	.atime = NAN,
+	.charset = NULL,
+	.comment = NULL,
+	.gid = ~(uint64_t)0,
+	.gname = NULL,
+	.hdrcharset = NULL,
+	.linkpath = NULL,
+	.mtime = NAN,
+	.path = NULL,
+	.size = ~(uint64_t)0,
+	.uid = ~(uint64_t)0,
+	.uname = NULL,
+};
+
 static char *dupstr(const char *src)
 {
 	if (!src) {
@@ -69,22 +88,7 @@ char scar_meta_filetype_to_char(enum scar_meta_filetype ft)
 
 void scar_meta_init_empty(struct scar_meta *meta)
 {
-	meta->type = SCAR_FT_UNKNOWN;
-	meta->mode = ~(uint32_t)0;
-	meta->devmajor = ~(uint32_t)0;
-	meta->devminor = ~(uint32_t)0;
-	meta->atime = NAN;
-	meta->charset = NULL;
-	meta->comment = NULL;
-	meta->gid = ~(uint64_t)0;
-	meta->gname = NULL;
-	meta->hdrcharset = NULL;
-	meta->linkpath = NULL;
-	meta->mtime = NAN;
-	meta->path = NULL;
-	meta->size = ~(uint64_t)0;
-	meta->uid = ~(uint64_t)0;
-	meta->uname = NULL;
+	memcpy(meta, &empty_meta, sizeof(*meta));
 }
 
 void scar_meta_init_file(
@@ -237,4 +241,5 @@ void scar_meta_destroy(struct scar_meta *meta)
 	free(meta->linkpath);
 	free(meta->path);
 	free(meta->uname);
+	scar_meta_init_empty(meta);
 }

@@ -110,7 +110,8 @@ void scar_meta_copy(struct scar_meta *dest, struct scar_meta *src);
 void scar_meta_print(struct scar_meta *meta, struct scar_io_writer *w);
 
 /// Free up every allocated string in a pax_meta struct.
-/// The struct can be re-used after another call to scar_meta_init.
+/// The scar_meta will be initialized to its empty state,
+/// as if by 'scar_meta_init_empty'.
 void scar_meta_destroy(struct scar_meta *meta);
 
 #endif

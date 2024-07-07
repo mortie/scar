@@ -8,17 +8,20 @@ struct scar_io_writer;
 struct scar_meta;
 
 /// Read all the metadata for the next pax entry.
-/// 'global' is expected to be initialized, and will be overwritten
-/// by the data in any 'g' metadata entry if it's encountered.
-/// 'meta' is expected to be uninitialized,
-/// its fields will be unconditionally overwritten without being freed.
+/// 'global' is expected to be initialized. Its fields will be overwritten
+/// by the data in any 'g' metadata entry if encountered,
+/// and its dynamically allocated fields will be freed
+/// before being ovewritten.
+/// 'meta' is not expected to be initialized,
+/// and its dynamically allocated fields will not be freed
+/// before being overwritten.
 /// The reader 'r' is expected to be positioned right at the start
 /// of an archive entry.
 /// Returns 1 on success, 0 if the end-of-archive indicator was reached,
 /// -1 on error.
 int scar_pax_read_meta(
-	struct scar_meta *global, struct scar_meta *meta,
-	struct scar_io_reader *r);
+	struct scar_io_reader *r,
+	struct scar_meta *global, struct scar_meta *meta);
 
 /// Read the contents of an archive entry.
 /// This will basically copy up to 'size' bytes from 'r' to 'w',
@@ -33,7 +36,8 @@ int scar_pax_read_content(
 /// USTAR header block if the metadata isn't fully representable
 /// using the USTAR format.
 /// Returns 0 on success, -1 on error.
-int scar_pax_write_meta(struct scar_meta *meta, struct scar_io_writer *w);
+int scar_pax_write_meta(
+	const struct scar_meta *meta, struct scar_io_writer *w);
 
 /// Write the contents of an archive entry.
 /// This will basically copy up to 'size' bytes from 'r' to 'w',
