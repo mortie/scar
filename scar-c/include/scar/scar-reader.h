@@ -3,7 +3,7 @@
 
 #include "io.h"
 #include "ioutil.h"
-#include "pax-meta.h"
+#include "meta.h"
 
 /// The scar_reader is an opaque type which is used to read a SCAR archive.
 struct scar_reader;
@@ -14,7 +14,7 @@ struct scar_index_iterator;
 
 /// The scar_index_entry represents the current entry of an index iterator.
 struct scar_index_entry {
-	enum scar_pax_filetype ft;
+	enum scar_meta_filetype ft;
 	char *name;
 	scar_offset offset;
 };

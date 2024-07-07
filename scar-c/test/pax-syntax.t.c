@@ -4,7 +4,7 @@
 
 #include "ioutil.h"
 #include "test.h"
-#include "pax-meta.h"
+#include "meta.h"
 
 TEST(basic_parsing)
 {
@@ -16,8 +16,8 @@ TEST(basic_parsing)
 	struct scar_mem_reader mr;
 	scar_mem_reader_init(&mr, pax, strlen(pax));
 
-	struct scar_pax_meta meta;
-	scar_pax_meta_init_empty(&meta);
+	struct scar_meta meta;
+	scar_meta_init_empty(&meta);
 
 	ASSERT(scar_pax_parse(&meta, &mr.r, mr.len) == 0);
 	ASSERT(meta.path);
@@ -26,7 +26,7 @@ TEST(basic_parsing)
 	ASSERT(meta.atime == -45.67);
 	ASSERT(meta.mtime == 100.33);
 
-	scar_pax_meta_destroy(&meta);
+	scar_meta_destroy(&meta);
 	OK();
 }
 
@@ -39,8 +39,8 @@ TEST(no_overread)
 	struct scar_mem_reader mr;
 	scar_mem_reader_init(&mr, data, strlen(data));
 
-	struct scar_pax_meta meta;
-	scar_pax_meta_init_empty(&meta);
+	struct scar_meta meta;
+	scar_meta_init_empty(&meta);
 
 	ASSERT(scar_pax_parse(&meta, &mr.r, 11) == 0);
 	ASSERT(meta.size == 12);
@@ -66,8 +66,8 @@ TEST(no_overread_block_aligned)
 	struct scar_mem_reader mr;
 	scar_mem_reader_init(&mr, blocks, 1024);
 
-	struct scar_pax_meta meta;
-	scar_pax_meta_init_empty(&meta);
+	struct scar_meta meta;
+	scar_meta_init_empty(&meta);
 
 	ASSERT(scar_pax_parse(&meta, &mr.r, 512) >= 0);
 	ASSERT(meta.path);
@@ -76,7 +76,7 @@ TEST(no_overread_block_aligned)
 	ASSERT(mr.r.read(&mr.r, str, 12) == 12);
 	ASSERT(strncmp(str, "hello world", 12) == 0);
 
-	scar_pax_meta_destroy(&meta);
+	scar_meta_destroy(&meta);
 	OK();
 }
 

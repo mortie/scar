@@ -3,7 +3,7 @@
 
 #include "compression.h"
 #include "io.h"
-#include "pax-meta.h"
+#include "meta.h"
 
 /// The scar_writer is an opaque type which is used to create a SCAR archive.
 struct scar_writer;
@@ -14,7 +14,7 @@ struct scar_writer *scar_writer_create(
 
 /// Write an entry to the SCAR archive.
 int scar_writer_write_entry(
-	struct scar_writer *sw, struct scar_pax_meta *meta, struct scar_io_reader *r);
+	struct scar_writer *sw, struct scar_meta *meta, struct scar_io_reader *r);
 
 /// Flush compressors and write out the footer of the SCAR archive.
 /// Does not free memory allocated by the writer;

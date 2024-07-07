@@ -6,7 +6,7 @@
 
 #include "internal-util.h"
 #include "ioutil.h"
-#include "pax-meta.h"
+#include "meta.h"
 
 static int parse_time(struct scar_block_reader *br, size_t size, double *num)
 {
@@ -102,7 +102,7 @@ static int parse_u64(struct scar_block_reader *br, size_t size, uint64_t *num)
 	return 0;
 }
 
-static int parse_one(struct scar_pax_meta *meta, struct scar_block_reader *br) {
+static int parse_one(struct scar_meta *meta, struct scar_block_reader *br) {
 	size_t fieldsize = 0;
 	size_t fieldsize_len = 0;
 	while (br->next != ' ') {
@@ -187,7 +187,7 @@ static int parse_one(struct scar_pax_meta *meta, struct scar_block_reader *br) {
 }
 
 int scar_pax_parse(
-	struct scar_pax_meta *meta, struct scar_io_reader *r, uint64_t size
+	struct scar_meta *meta, struct scar_io_reader *r, uint64_t size
 ) {
 	struct scar_limited_reader lr;
 	scar_limited_reader_init(&lr, r, size);

@@ -4,7 +4,7 @@
 #include "compression.h"
 #include "io.h"
 #include "ioutil.h"
-#include "pax-meta.h"
+#include "meta.h"
 #include "pax-syntax.h"
 #include "pax.h"
 #include "scar-reader.h"

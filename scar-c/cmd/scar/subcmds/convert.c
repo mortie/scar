@@ -10,8 +10,8 @@
 int cmd_convert(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
-	struct scar_pax_meta global = {0};
-	struct scar_pax_meta meta = {0};
+	struct scar_meta global = {0};
+	struct scar_meta meta = {0};
 	struct scar_writer *sw = NULL;
 
 	if (argc > 0) {
@@ -31,9 +31,9 @@ int cmd_convert(struct args *args, char **argv, int argc)
 		goto err;
 	}
 
-	scar_pax_meta_init_empty(&global);
+	scar_meta_init_empty(&global);
 	while (1) {
-		scar_pax_meta_destroy(&meta);
+		scar_meta_destroy(&meta);
 		int r = scar_pax_read_meta(&global, &meta, &args->input.r);
 		if (r < 0) {
 			goto err;
@@ -56,8 +56,8 @@ exit:
 	if (sw) {
 		scar_writer_free(sw);
 	}
-	scar_pax_meta_destroy(&meta);
-	scar_pax_meta_destroy(&global);
+	scar_meta_destroy(&meta);
+	scar_meta_destroy(&global);
 	return ret;
 err:
 	ret = 1;

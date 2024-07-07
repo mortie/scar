@@ -20,7 +20,7 @@ libscar = library(
   'src/compression/common.c',
   'src/compression/gzip.c',
   'src/ioutil.c',
-  'src/pax-meta.c',
+  'src/meta.c',
   'src/pax-syntax.c',
   'src/pax.c',
   'src/scar-reader.c',

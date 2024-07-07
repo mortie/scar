@@ -5,7 +5,7 @@
 
 struct scar_io_reader;
 struct scar_io_writer;
-struct scar_pax_meta;
+struct scar_meta;
 
 /// Read all the metadata for the next pax entry.
 /// 'global' is expected to be initialized, and will be overwritten
@@ -17,7 +17,7 @@ struct scar_pax_meta;
 /// Returns 1 on success, 0 if the end-of-archive indicator was reached,
 /// -1 on error.
 int scar_pax_read_meta(
-	struct scar_pax_meta *global, struct scar_pax_meta *meta,
+	struct scar_meta *global, struct scar_meta *meta,
 	struct scar_io_reader *r);
 
 /// Read the contents of an archive entry.
@@ -33,7 +33,7 @@ int scar_pax_read_content(
 /// USTAR header block if the metadata isn't fully representable
 /// using the USTAR format.
 /// Returns 0 on success, -1 on error.
-int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w);
+int scar_pax_write_meta(struct scar_meta *meta, struct scar_io_writer *w);
 
 /// Write the contents of an archive entry.
 /// This will basically copy up to 'size' bytes from 'r' to 'w',
@@ -44,7 +44,7 @@ int scar_pax_write_content(
 /// Write a header + content.
 /// Utility function to combine scar_pax_write_meta and scar_pax_write_content.
 int scar_pax_write_entry(
-	struct scar_pax_meta *meta, struct scar_io_reader *r,
+	struct scar_meta *meta, struct scar_io_reader *r,
 	struct scar_io_writer *w);
 
 /// Write the end-of-archive indicator.

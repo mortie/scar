@@ -28,7 +28,7 @@ struct scar_index_iterator {
 	struct scar_counting_reader counter;
 	scar_offset next_offset;
 	struct scar_io_seeker *seeker;
-	struct scar_pax_meta global;
+	struct scar_meta global;
 };
 
 // Returns 1 if the tail was successfully parsed, 0 if not,
@@ -180,7 +180,7 @@ struct scar_index_iterator *scar_reader_iterate(struct scar_reader *sr)
 		return NULL;
 	}
 
-	scar_pax_meta_init_empty(&it->global);
+	scar_meta_init_empty(&it->global);
 
 	it->seeker = sr->raw_s;
 	if (it->seeker->seek(it->seeker, sr->index_offset, SCAR_SEEK_START) < 0) {
@@ -318,7 +318,7 @@ start:
 		goto start;
 	}
 
-	entry->ft = scar_pax_filetype_from_char(ft);
+	entry->ft = scar_meta_filetype_from_char(ft);
 
 	it->buf.len = 0;
 	while (remaining > 1) {

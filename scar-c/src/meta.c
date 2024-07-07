@@ -1,4 +1,4 @@
-#include "pax-meta.h"
+#include "meta.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -19,7 +19,7 @@ static char *dupstr(const char *src)
 	return dest;
 }
 
-enum scar_pax_filetype scar_pax_filetype_from_char(char ch)
+enum scar_meta_filetype scar_meta_filetype_from_char(char ch)
 {
 	switch (ch) {
 	case '0':
@@ -43,7 +43,7 @@ enum scar_pax_filetype scar_pax_filetype_from_char(char ch)
 	return SCAR_FT_UNKNOWN;
 }
 
-char scar_pax_filetype_to_char(enum scar_pax_filetype ft)
+char scar_meta_filetype_to_char(enum scar_meta_filetype ft)
 {
 	switch (ft) {
 	case SCAR_FT_UNKNOWN:
@@ -67,7 +67,7 @@ char scar_pax_filetype_to_char(enum scar_pax_filetype ft)
 	return '?';
 }
 
-void scar_pax_meta_init_empty(struct scar_pax_meta *meta)
+void scar_meta_init_empty(struct scar_meta *meta)
 {
 	meta->type = SCAR_FT_UNKNOWN;
 	meta->mode = ~(uint32_t)0;
@@ -87,70 +87,70 @@ void scar_pax_meta_init_empty(struct scar_pax_meta *meta)
 	meta->uname = NULL;
 }
 
-void scar_pax_meta_init_file(
-	struct scar_pax_meta *meta, char *path, uint64_t size
+void scar_meta_init_file(
+	struct scar_meta *meta, char *path, uint64_t size
 ) {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_FILE;
 	meta->path = dupstr(path);
 	meta->size = size;
 }
 
-void scar_pax_meta_init_hardlink(
-	struct scar_pax_meta *meta, char *path, char *linkpath
+void scar_meta_init_hardlink(
+	struct scar_meta *meta, char *path, char *linkpath
 ) {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_HARDLINK;
 	meta->path = dupstr(path);
 	meta->linkpath = dupstr(linkpath);
 }
 
-void scar_pax_meta_init_symlink(
-	struct scar_pax_meta *meta, char *path, char *linkpath
+void scar_meta_init_symlink(
+	struct scar_meta *meta, char *path, char *linkpath
 ) {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_SYMLINK;
 	meta->path = dupstr(path);
 	meta->linkpath = dupstr(linkpath);
 }
 
-void scar_pax_meta_init_directory(struct scar_pax_meta *meta, char *path)
+void scar_meta_init_directory(struct scar_meta *meta, char *path)
 {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_DIRECTORY;
 	meta->path = dupstr(path);
 }
 
-void scar_pax_meta_init_chardev(
-	struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min
+void scar_meta_init_chardev(
+	struct scar_meta *meta, char *path, uint32_t maj, uint32_t min
 ) {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_CHARDEV;
 	meta->path = dupstr(path);
 	meta->devmajor = maj;
 	meta->devminor = min;
 }
 
-void scar_pax_meta_init_blockdev(
-	struct scar_pax_meta *meta, char *path, uint32_t maj, uint32_t min
+void scar_meta_init_blockdev(
+	struct scar_meta *meta, char *path, uint32_t maj, uint32_t min
 ) {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_BLOCKDEV;
 	meta->path = dupstr(path);
 	meta->devmajor = maj;
 	meta->devminor = min;
 }
 
-void scar_pax_meta_init_fifo(struct scar_pax_meta *meta, char *path)
+void scar_meta_init_fifo(struct scar_meta *meta, char *path)
 {
-	scar_pax_meta_init_empty(meta);
+	scar_meta_init_empty(meta);
 	meta->type = SCAR_FT_FIFO;
 	meta->path = dupstr(path);
 }
 
-void scar_pax_meta_copy(struct scar_pax_meta *dest, struct scar_pax_meta *src)
+void scar_meta_copy(struct scar_meta *dest, struct scar_meta *src)
 {
-	memcpy(dest, src, sizeof(struct scar_pax_meta));
+	memcpy(dest, src, sizeof(struct scar_meta));
 	dest->charset = dupstr(src->charset);
 	dest->comment = dupstr(src->comment);
 	dest->gname = dupstr(src->gname);
@@ -160,75 +160,75 @@ void scar_pax_meta_copy(struct scar_pax_meta *dest, struct scar_pax_meta *src)
 	dest->uname = dupstr(src->uname);
 }
 
-void scar_pax_meta_print(struct scar_pax_meta *meta, struct scar_io_writer *w)
+void scar_meta_print(struct scar_meta *meta, struct scar_io_writer *w)
 {
 	scar_io_printf(w, "Metadata{\n");
-	scar_io_printf(w, "\ttype: %c\n", scar_pax_filetype_to_char(meta->type));
+	scar_io_printf(w, "\ttype: %c\n", scar_meta_filetype_to_char(meta->type));
 
-	if (~meta->mode) {
+	if (SCAR_META_HAS_MODE(meta)) {
 		scar_io_printf(w, "\tmode: 0%03" PRIu32 "\n", meta->mode);
 	}
 
-	if (~meta->devmajor) {
+	if (SCAR_META_HAS_DEVMAJOR(meta)) {
 		scar_io_printf(w, "\tdevmajor: %" PRIu32 "\n", meta->devmajor);
 	}
 
-	if (~meta->devminor) {
+	if (SCAR_META_HAS_DEVMINOR(meta)) {
 		scar_io_printf(w, "\tdevminor: %" PRIu32 "\n", meta->devminor);
 	}
 
-	if (!isnan(meta->atime)) {
+	if (SCAR_META_HAS_ATIME(meta)) {
 		scar_io_printf(w, "\tatime: %f\n", meta->atime);
 	}
 
-	if (meta->charset) {
+	if (SCAR_META_HAS_CHARSET(meta)) {
 		scar_io_printf(w, "\tcharset: %s\n", meta->charset);
 	}
 
-	if (meta->comment) {
+	if (SCAR_META_HAS_COMMENT(meta)) {
 		scar_io_printf(w, "\tcomment: %s\n", meta->comment);
 	}
 
-	if (~meta->gid) {
+	if (SCAR_META_HAS_GID(meta)) {
 		scar_io_printf(w, "\tgid: %" PRIu64 "\n", meta->gid);
 	}
 
-	if (meta->gname) {
+	if (SCAR_META_HAS_GNAME(meta)) {
 		scar_io_printf(w, "\tgname: %s\n", meta->gname);
 	}
 
-	if (meta->hdrcharset) {
+	if (SCAR_META_HAS_HDRCHARSET(meta)) {
 		scar_io_printf(w, "\thdrcharset: %s\n", meta->hdrcharset);
 	}
 
-	if (meta->linkpath) {
+	if (SCAR_META_HAS_LINKPATH(meta)) {
 		scar_io_printf(w, "\tlinkpath: %s\n", meta->linkpath);
 	}
 
-	if (!isnan(meta->mtime)) {
+	if (SCAR_META_HAS_MTIME(meta)) {
 		scar_io_printf(w, "\tmtime: %f\n", meta->mtime);
 	}
 
-	if (meta->path) {
+	if (SCAR_META_HAS_PATH(meta)) {
 		scar_io_printf(w, "\tpath: %s\n", meta->path);
 	}
 
-	if (~meta->size) {
+	if (SCAR_META_HAS_SIZE(meta)) {
 		scar_io_printf(w, "\tsize: %" PRIu64 "\n", meta->size);
 	}
 
-	if (~meta->uid) {
+	if (SCAR_META_HAS_UID(meta)) {
 		scar_io_printf(w, "\tuid: %" PRIu64 "\n", meta->uid);
 	}
 
-	if (meta->uname) {
+	if (SCAR_META_HAS_UNAME(meta)) {
 		scar_io_printf(w, "\tuname: %s\n", meta->uname);
 	}
 
 	scar_io_printf(w, "}\n");
 }
 
-void scar_pax_meta_destroy(struct scar_pax_meta *meta)
+void scar_meta_destroy(struct scar_meta *meta)
 {
 	free(meta->charset);
 	free(meta->comment);

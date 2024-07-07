@@ -5,7 +5,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "pax-meta.h"
+#include "meta.h"
 #include "ioutil.h"
 #include "pax-syntax.h"
 #include "ustar.h"
@@ -41,7 +41,7 @@ static int read_bytes_block_aligned(
 }
 
 static int read_pax_block_aligned(
-	struct scar_pax_meta *meta, size_t size, struct scar_io_reader *r
+	struct scar_meta *meta, size_t size, struct scar_io_reader *r
 ) {
 	unsigned char block[512];
 
@@ -159,14 +159,14 @@ static char *block_read_path(
 }
 
 int scar_pax_read_meta(
-	struct scar_pax_meta *global, struct scar_pax_meta *meta,
+	struct scar_meta *global, struct scar_meta *meta,
 	struct scar_io_reader *r
 ) {
 	unsigned char block[512];
 	char ftype;
 	uint64_t size;
 
-	scar_pax_meta_copy(meta, global);
+	scar_meta_copy(meta, global);
 
 	if (r->read(r, block, 512) < 512) {
 		SCAR_ERETURN(-1);
@@ -237,7 +237,7 @@ int scar_pax_read_meta(
 				SCAR_ERETURN(-1);
 			}
 
-			scar_pax_meta_copy(meta, global);
+			scar_meta_copy(meta, global);
 		}
 
 		// Anything else should be a valid scar_pax_filetype.
@@ -252,7 +252,7 @@ int scar_pax_read_meta(
 		}
 	}
 
-	meta->type = scar_pax_filetype_from_char(ftype);
+	meta->type = scar_meta_filetype_from_char(ftype);
 	if (meta->type == SCAR_FT_UNKNOWN) {
 		SCAR_ERETURN(-1);
 	}
@@ -452,54 +452,55 @@ static int pax_write_uint(struct scar_mem_writer *mw, char *name, uint64_t num)
 	return pax_write_field(mw, name, buf, (size_t)n);
 }
 
-int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
+int scar_pax_write_meta(struct scar_meta *meta, struct scar_io_writer *w)
 {
 	unsigned char block[512] = {0};
 
 	struct scar_mem_writer paxhdr;
 	scar_mem_writer_init(&paxhdr);
 
-	if (!isnan(meta->atime)) {
+	if (SCAR_META_HAS_ATIME(meta)) {
 		if (pax_write_time(&paxhdr, "atime", meta->atime) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (meta->charset) {
-		if (pax_write_string(&paxhdr, "charset", meta->charset) < 0) SCAR_ERETURN(-1);
+	if (SCAR_META_HAS_CHARSET(meta)) {
+		if (pax_write_string(&paxhdr, "charset", meta->charset) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
-	if (meta->comment) {
-		if (pax_write_string(&paxhdr, "comment", meta->comment) < 0) SCAR_ERETURN(-1);
+	if (SCAR_META_HAS_COMMENT(meta)) {
+		if (pax_write_string(&paxhdr, "comment", meta->comment) < 0) {
+			SCAR_ERETURN(-1);
+		}
 	}
 
-	if (meta->comment) {
-		if (pax_write_string(&paxhdr, "comment", meta->comment) < 0) SCAR_ERETURN(-1);
+	if (SCAR_META_HAS_GID(meta) && meta->gid > 07777777ll) {
+		if (pax_write_uint(&paxhdr, "gid", meta->gid) < 0)
+			SCAR_ERETURN(-1);
 	}
 
-	if (~meta->gid && meta->gid > 07777777ll) {
-		if (pax_write_uint(&paxhdr, "gid", meta->gid) < 0) SCAR_ERETURN(-1);
-	}
-
-	if (meta->gname && strlen(meta->gname) > 32) {
+	if (SCAR_META_HAS_GNAME(meta) && strlen(meta->gname) > 32) {
 		if (pax_write_string(&paxhdr, "gname", meta->gname) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (meta->hdrcharset) {
+	if (SCAR_META_HAS_HDRCHARSET(meta)) {
 		if (pax_write_string(&paxhdr, "hdrcharset", meta->hdrcharset) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (meta->linkpath && strlen(meta->linkpath) > 100) {
+	if (SCAR_META_HAS_LINKPATH(meta) && strlen(meta->linkpath) > 100) {
 		if (pax_write_string(&paxhdr, "linkpath", meta->linkpath) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (!isnan(meta->mtime) && (
+	if (SCAR_META_HAS_MTIME(meta) && (
 		meta->mtime < 0 ||
 		meta->mtime > 0777777777777ll ||
 		meta->mtime != floor(meta->mtime))
@@ -509,25 +510,25 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 		}
 	}
 
-	if (meta->path && strlen(meta->path) > 100) {
+	if (SCAR_META_HAS_PATH(meta) && strlen(meta->path) > 100) {
 		if (pax_write_string(&paxhdr, "path", meta->path) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (~meta->size && meta->size > 077777777777ll) {
+	if (SCAR_META_HAS_SIZE(meta) && meta->size > 077777777777ll) {
 		if (pax_write_uint(&paxhdr, "size", meta->size) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (~meta->uid && meta->uid > 07777777ll) {
+	if (SCAR_META_HAS_UID(meta) && meta->uid > 07777777ll) {
 		if (pax_write_uint(&paxhdr, "uid", meta->uid) < 0) {
 			SCAR_ERETURN(-1);
 		}
 	}
 
-	if (meta->uname && strlen(meta->uname) > 32) {
+	if (SCAR_META_HAS_UNAME(meta) && strlen(meta->uname) > 32) {
 		if (pax_write_string(&paxhdr, "uname", meta->uname) < 0) {
 			SCAR_ERETURN(-1);
 		}
@@ -569,7 +570,7 @@ int scar_pax_write_meta(struct scar_pax_meta *meta, struct scar_io_writer *w)
 		block, SCAR_UST_MTIME,
 		meta->mtime > 0 ? (uint64_t)meta->mtime : 0);
 	block[SCAR_UST_TYPEFLAG.start] =
-		(unsigned char)scar_pax_filetype_to_char(meta->type);
+		(unsigned char)scar_meta_filetype_to_char(meta->type);
 	block_write_string(block, SCAR_UST_LINKNAME, meta->linkpath);
 	memcpy(&block[SCAR_UST_MAGIC.start], "ustar", 6);
 	memcpy(&block[SCAR_UST_VERSION.start], "00", 2);
@@ -621,7 +622,7 @@ int scar_pax_write_content(
 }
 
 int scar_pax_write_entry(
-		struct scar_pax_meta *meta, struct scar_io_reader *r,
+		struct scar_meta *meta, struct scar_io_reader *r,
 	struct scar_io_writer *w)
 {
 	int ret = scar_pax_write_meta(meta, w);

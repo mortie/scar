@@ -103,7 +103,7 @@ static int create_checkpoint(struct scar_writer *sw)
 }
 
 int scar_writer_write_entry(
-	struct scar_writer *sw, struct scar_pax_meta *meta,
+	struct scar_writer *sw, struct scar_meta *meta,
 	struct scar_io_reader *r
 ) {
 	scar_ssize ret;
@@ -122,7 +122,7 @@ int scar_writer_write_entry(
 	struct scar_mem_writer entry_buf;
 	scar_mem_writer_init(&entry_buf);
 	ret = scar_io_printf(
-		&entry_buf.w, "%c %lld %s\n", scar_pax_filetype_to_char(meta->type),
+		&entry_buf.w, "%c %lld %s\n", scar_meta_filetype_to_char(meta->type),
 		sw->uncompressed_writer.count, meta->path);
 	if (ret < 0) {
 		free(entry_buf.buf);
