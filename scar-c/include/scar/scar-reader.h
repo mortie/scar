@@ -17,6 +17,7 @@ struct scar_index_entry {
 	enum scar_meta_filetype ft;
 	char *name;
 	scar_offset offset;
+	const struct scar_meta *global;
 };
 
 /// Create a scar_reader.

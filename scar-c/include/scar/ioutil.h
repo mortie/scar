@@ -128,5 +128,7 @@ void scar_block_reader_consume(struct scar_block_reader *br);
 int scar_block_reader_skip(struct scar_block_reader *br, size_t n);
 scar_ssize scar_block_reader_read(
 	struct scar_io_reader *r, void *buf, size_t n);
+scar_ssize scar_block_reader_read_line(
+	struct scar_block_reader *br, void *buf, size_t n);
 
 #endif

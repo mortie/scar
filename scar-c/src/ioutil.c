@@ -425,3 +425,32 @@ scar_ssize scar_block_reader_read(struct scar_io_reader *r, void *buf, size_t n)
 
 	return ret;
 }
+
+scar_ssize scar_block_reader_read_line(
+	struct scar_block_reader *br, void *buf, size_t n
+) {
+	scar_ssize ret = 0;
+
+	unsigned char *cbuf = (unsigned char *)buf;
+	while (ret - 1 < (scar_ssize)n) {
+		if (br->next == EOF) {
+			*cbuf = '\0';
+			return ret;
+		} else if (br->next == '\n' || br->next == '\r') {
+			*cbuf = '\0';
+			break;
+		}
+
+		*cbuf = (unsigned char)br->next;
+		cbuf += 1;
+		ret += 1;
+
+		scar_block_reader_consume(br);
+	}
+
+	while (br->next == '\n' || br->next == '\r') {
+		scar_block_reader_consume(br);
+	}
+
+	return ret;
+}
