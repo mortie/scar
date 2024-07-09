@@ -6,11 +6,17 @@
 
 #include "../rx.h"
 
-int cmd_ls(struct args *args, char **argv, int argc)
+int cmd_cat(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
 	struct scar_reader *sr = NULL;
 	struct scar_index_iterator *it = NULL;
+	struct scar_meta meta = {0};
+
+	if (argc == 0) {
+		fprintf(stderr, "Expected at least 1 argument\n");
+		goto err;
+	}
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
@@ -18,20 +24,9 @@ int cmd_ls(struct args *args, char **argv, int argc)
 		goto err;
 	}
 
-	char *default_pattern = ".";
-	char **patterns;
-	size_t patcount;
-	if (argc == 0) {
-		patterns = &default_pattern;
-		patcount = 1;
-	} else {
-		patterns = argv;
-		patcount = (size_t)argc;
-	}
-
-	for (size_t i = 0; i < patcount; ++i) {
+	for (int i = 0; i < argc; ++i) {
 		regex_t rx;
-		if (build_regex(&rx, patterns[i], RX_MATCH_DIR_ENTRIES) < 0) {
+		if (build_regex(&rx, argv[i], 0) < 0) {
 			goto err;
 		}
 
@@ -44,11 +39,26 @@ int cmd_ls(struct args *args, char **argv, int argc)
 
 		struct scar_index_entry entry;
 		while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
+			if (entry.ft != SCAR_FT_FILE) {
+				continue;
+			}
+
 			if (regexec(&rx, entry.name, 0, NULL, 0) != 0) {
 				continue;
 			}
 
-			fprintf(args->output.f, "%s\n", entry.name);
+			scar_meta_destroy(&meta);
+			if (scar_reader_read_meta(
+				sr, entry.offset, entry.global, &meta) < 0
+			) { 
+				fprintf(stderr, "Failed to read '%s'\n", entry.name);
+				continue;
+			}
+
+			if (scar_reader_read_content(sr, &args->output.w, meta.size) < 0) {
+				fprintf(stderr, "Failed to read '%s'\n", entry.name);
+				continue;
+			}
 		}
 
 		regfree(&rx);
@@ -60,6 +70,7 @@ int cmd_ls(struct args *args, char **argv, int argc)
 	}
 
 exit:
+	scar_meta_destroy(&meta);
 	if (it) {
 		scar_index_iterator_free(it);
 	}

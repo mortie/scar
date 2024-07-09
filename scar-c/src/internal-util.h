@@ -19,13 +19,17 @@ static inline size_t log10_ceil(size_t num)
 }
 
 #ifdef SCAR_TRACE_ERROR
-#define SCAR_ERETURN(ret) do { \
+#define SCAR_ELOG() do { \
 	fprintf( \
 		stderr, "SCAR TRACE ERROR: %s:%d(%s)\n", \
 		__FILE__, __LINE__, __func__); \
+} while (0)
+#define SCAR_ERETURN(ret) do { \
+	SCAR_ELOG(); \
 	return (ret); \
 } while (0)
 #else
+#define SCAR_ELOG() (void)0
 #define SCAR_ERETURN(ret) return (ret)
 #endif
 

@@ -13,9 +13,10 @@ static const char *usageText =
 	"Usage: %s [options] <scar file> <command> [args...]\n"
 	"\n"
 	"Commands:\n"
-	"  ls [files...] List the contents of directories in the archive.\n"
-	"  tree          List all the entries in the archive.\n"
-	"  convert       Convert a tar/pax file to a scar file.\n"
+	"  ls [files...]  List the contents of directories in the archive.\n"
+	"  cat <files...> Read the contents of files in the archive.\n"
+	"  tree           List all the entries in the archive.\n"
+	"  convert        Convert a tar/pax file to a scar file.\n"
 	"\n"
 	"Options:\n"
 	"  -o,--out   <file>  Output file (default: stdout)\n"
@@ -113,6 +114,8 @@ int main(int argc, char **argv)
 
 	if (streq(subcmd, "ls") ) {
 		ret = cmd_ls(&args, argv, argc);
+	} else if (streq(subcmd, "cat")) {
+		ret = cmd_cat(&args, argv, argc);
 	} else if (streq(subcmd, "tree")) {
 		ret = cmd_tree(&args, argv, argc);
 	} else if (streq(subcmd, "convert")) {

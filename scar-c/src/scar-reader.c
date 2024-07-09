@@ -81,18 +81,20 @@ static int reader_ensure_checkpoint_section(struct scar_reader *sr)
 
 	while (true) {
 		scar_ssize len = scar_block_reader_read_line(&br, line, sizeof(line));
-		if (len == 0) {
+		if (br.error) {
+			SCAR_ELOG();
 			ret = -1;
 			break;
 		}
 
-		if (strcmp(line, "SCAR-TAIL") == 0) {
+		if (len == 0 || strcmp(line, "SCAR-TAIL") == 0) {
 			sr->has_checkpoints = true;
 			break;
 		}
 
 		char *sep = strchr(line, ' ');
 		if (!sep) {
+			SCAR_ELOG();
 			ret = -1;
 			break;
 		}
@@ -102,12 +104,14 @@ static int reader_ensure_checkpoint_section(struct scar_reader *sr)
 
 		long long compressed = strtoll(line, &endptr, 10);
 		if (*endptr != '\0') {
+			SCAR_ELOG();
 			ret = -1;
 			break;
 		}
 
 		long long uncompressed = strtoll(sep + 1, &endptr, 10);
 		if (*endptr != '\0') {
+			SCAR_ELOG();
 			ret = -1;
 			break;
 		}
@@ -116,15 +120,20 @@ static int reader_ensure_checkpoint_section(struct scar_reader *sr)
 		void *new_alloc = realloc(
 			sr->checkpoints, sr->checkpointcount * sizeof(*sr->checkpoints));
 		if (!new_alloc) {
-			free(sr->checkpoints);
-			sr->checkpoints = NULL;
-			sr->checkpointcount = 0;
+			SCAR_ELOG();
+			ret = -1;
 			break;
 		}
 
 		sr->checkpoints = new_alloc;
 		sr->checkpoints[sr->checkpointcount - 1].compressed = compressed;
 		sr->checkpoints[sr->checkpointcount - 1].uncompressed = uncompressed;
+	}
+
+	if (ret != 0) {
+		free(sr->checkpoints);
+		sr->checkpoints = NULL;
+		sr->checkpointcount = 0;
 	}
 
 	sr->comp.destroy_decompressor(decomp);
@@ -199,15 +208,16 @@ static int reader_seek_to(struct scar_reader *sr, scar_offset offset_uc)
 			n = sizeof(buf);
 		}
 
-		if (sr->current_decomp->r.read(
-			&sr->current_decomp->r, buf, n) < (scar_ssize)n
-		) {
+		scar_ssize ret = sr->current_decomp->r.read(
+			&sr->current_decomp->r, buf, n);
+		if (ret < (scar_ssize)n) {
 			sr->current_offset.uncompressed = -1;
 			sr->current_offset.compressed = -1;
 			SCAR_ERETURN(-1);
 		}
 
 		sr->current_offset.uncompressed += n;
+		skip -= n;
 	}
 
 	sr->current_offset.compressed += sr->decomp_counter.count;
@@ -350,7 +360,7 @@ struct scar_reader *scar_reader_create(
 
 	sr->current_offset.uncompressed = -1;
 	sr->current_offset.compressed = -1;
-	scar_counting_reader_init(&sr->decomp_counter, sr->raw_r);
+	scar_counting_reader_init(&sr->decomp_counter, r);
 	sr->current_decomp = NULL;
 	sr->has_checkpoints = false;
 	sr->checkpoints = NULL;

@@ -38,6 +38,7 @@ libscar_dep = declare_dependency(
 
 executable(
   'scar',
+  'cmd/scar/subcmds/cat.c',
   'cmd/scar/subcmds/convert.c',
   'cmd/scar/subcmds/ls.c',
   'cmd/scar/subcmds/tree.c',
