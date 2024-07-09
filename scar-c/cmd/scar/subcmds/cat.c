@@ -20,7 +20,8 @@ int cmd_cat(struct args *args, char **argv, int argc)
 
 	sr = scar_reader_create(&args->input.r, &args->input.s);
 	if (!sr) {
-		fprintf(stderr, "Failed to create reader\n");
+		fprintf(stderr, "Failed to create scar reader.\n");
+		fprintf(stderr, "Is the file a scar archive?\n");
 		goto err;
 	}
 
