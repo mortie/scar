@@ -37,8 +37,15 @@ libscar_dep = declare_dependency(
   link_with: libscar,
 )
 
+if host_machine.system() == 'windows'
+  system = 'windows'
+else
+  system = 'posix'
+endif
+
 executable(
   'scar',
+  'cmd/scar/platform/' + system + '.c',
   'cmd/scar/subcmds/cat.c',
   'cmd/scar/subcmds/convert.c',
   'cmd/scar/subcmds/ls.c',

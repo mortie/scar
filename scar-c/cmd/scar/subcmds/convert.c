@@ -1,11 +1,10 @@
-#define _POSIX_C_SOURCE 200112L
-
 #include "../subcmds.h"
 
 #include <stdio.h>
-#include <unistd.h>
 
 #include <scar/scar.h>
+
+#include "../platform.h"
 
 int cmd_convert(struct args *args, char **argv, int argc)
 {
@@ -19,7 +18,7 @@ int cmd_convert(struct args *args, char **argv, int argc)
 		goto err;
 	}
 
-	if (isatty(fileno(args->output.f)) && !args->force) {
+	if (is_file_tty(args->output.f) && !args->force) {
 		fprintf(stderr, "Refusing to write to a TTY.\n");
 		fprintf(stderr, "Re-run with '--force' to ignore this check.\n");
 		goto err;
