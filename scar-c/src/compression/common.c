@@ -5,10 +5,12 @@
 bool scar_compression_init_from_name(
 	struct scar_compression *comp, const char *name
 ) {
-	if (strcmp(name, "gzip") == 0) {
-		scar_compression_init_gzip(comp);
-		return true;
-	}
+#define X(xname) if (strcmp(name, #xname) == 0) { \
+	scar_compression_init_ ## xname(comp); \
+	return true; \
+}
+	SCAR_COMPRESSOR_NAMES
+#undef X
 
 	return false;
 }
@@ -29,12 +31,16 @@ static int suffix_match(
 bool scar_compression_init_from_tail(
 	struct scar_compression *comp, void *buf, size_t len
 ) {
-	scar_compression_init_gzip(comp);
-	if (suffix_match(
-		buf, (size_t)len, comp->eof_marker, comp->eof_marker_len)
-	) {
-		return true;
-	}
+#define X(xname) do { \
+	scar_compression_init_ ## xname(comp); \
+	if (suffix_match( \
+		buf, (size_t)len, comp->eof_marker, comp->eof_marker_len) \
+	) { \
+		return true; \
+	} \
+} while (0);
+	SCAR_COMPRESSOR_NAMES
+#undef X
 
 	return false;
 }

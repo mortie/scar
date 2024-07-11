@@ -10,7 +10,7 @@
 int cmd_convert(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
-	struct scar_meta global;
+	struct scar_meta global = {0};
 	struct scar_meta meta = {0};
 	struct scar_writer *sw = NULL;
 

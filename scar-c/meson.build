@@ -19,6 +19,7 @@ libscar = library(
   'scar',
   'src/compression/common.c',
   'src/compression/gzip.c',
+  'src/compression/plain.c',
   'src/ioutil.c',
   'src/meta.c',
   'src/pax-syntax.c',
@@ -51,7 +52,7 @@ executable(
 executable(
   'test-scar',
   'test/main.c',
-  'test/compression/gzip.t.c',
+  'test/compression.t.c',
   'test/ioutil/block-reader.t.c',
   'test/ioutil/mem.t.c',
   'test/pax-syntax.t.c',

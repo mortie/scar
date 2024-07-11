@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define TEST_GROUPS \
-	X(compression_gzip) \
+	X(compression) \
 	X(ioutil_block_reader) \
 	X(ioutil_mem) \
 	X(pax_syntax) \

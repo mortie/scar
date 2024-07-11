@@ -5,6 +5,11 @@
 
 #include "io.h"
 
+#define SCAR_COMPRESSOR_NAMES \
+	X(plain) \
+	X(gzip) \
+//
+
 struct scar_compressor {
 	struct scar_io_writer w;
 	int (*flush)(struct scar_compressor *c);
@@ -29,6 +34,7 @@ struct scar_compression {
 };
 
 void scar_compression_init_gzip(struct scar_compression *comp);
+void scar_compression_init_plain(struct scar_compression *comp);
 
 /// Initialize compression from human readable name.
 /// Returns true if one was found, false otherwise.
