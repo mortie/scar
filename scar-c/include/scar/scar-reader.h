@@ -2,7 +2,6 @@
 #define SCAR_READER_H
 
 #include "io.h"
-#include "ioutil.h"
 #include "meta.h"
 
 /// The scar_reader is an opaque type which is used to read a SCAR archive.

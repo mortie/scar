@@ -121,6 +121,7 @@ int scar_writer_write_entry(
 
 	struct scar_mem_writer entry_buf;
 	scar_mem_writer_init(&entry_buf);
+
 	ret = scar_io_printf(
 		&entry_buf.w, "%c %lld %s\n", scar_meta_filetype_to_char(meta->type),
 		sw->uncompressed_writer.count, meta->path);

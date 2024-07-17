@@ -32,7 +32,6 @@ scar_ssize scar_io_vprintf(
 
 	void *mbuf = malloc((size_t)n + 1);
 	n = vsnprintf(mbuf, (size_t)n + 1, fmt, ap);
-	printf("writing %d mallocd bytes\n", n);
 	scar_ssize ret = w->write(w, mbuf, (size_t)n);
 	free(mbuf);
 	return ret;

@@ -1,5 +1,5 @@
-#ifndef SCAR_CMD_UTIL_H
-#define SCAR_CMD_UTIL_H
+#ifndef SCAR_CMD_RX_H
+#define SCAR_CMD_RX_H
 
 #include <stdbool.h>
 #include <regex.h>

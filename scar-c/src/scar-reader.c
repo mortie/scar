@@ -40,7 +40,6 @@ struct scar_index_iterator {
 
 	struct scar_mem_writer buf;
 	struct scar_block_reader br;
-	struct scar_counting_reader counter;
 	scar_offset next_offset;
 	struct scar_io_seeker *seeker;
 	struct scar_meta global;
@@ -239,13 +238,13 @@ static int parse_tail(struct scar_reader *sr, unsigned char *tail, size_t len)
 
 	scar_ssize plainlen = d->r.read(&d->r, plainbuf, sizeof(plainbuf));
 	if (plainlen < 10) {
-		free(d);
+		sr->comp.destroy_decompressor(d);
 		return 0;
 	}
 
 	char *plain = plainbuf;
 	if (memcmp("SCAR-TAIL\n", plain, 10) != 0) {
-		free(d);
+		sr->comp.destroy_decompressor(d);
 		return 0;
 	}
 
@@ -255,7 +254,7 @@ static int parse_tail(struct scar_reader *sr, unsigned char *tail, size_t len)
 	sr->index_offset = 0;
 	while (plainlen > 1 && *plain != '\n') {
 		if (*plain < '0' || *plain > '9') {
-			free(d);
+			sr->comp.destroy_decompressor(d);
 			return 0;
 		}
 		sr->index_offset *= 10;
@@ -265,7 +264,7 @@ static int parse_tail(struct scar_reader *sr, unsigned char *tail, size_t len)
 	}
 
 	if (*plain != '\n') {
-		free(d);
+		sr->comp.destroy_decompressor(d);
 		return 0;
 	}
 	plain += 1;
@@ -274,7 +273,7 @@ static int parse_tail(struct scar_reader *sr, unsigned char *tail, size_t len)
 	sr->checkpoints_offset = 0;
 	while (plainlen > 1 && *plain != '\n') {
 		if (*plain < '0' || *plain > '9') {
-			free(d);
+			sr->comp.destroy_decompressor(d);
 			return 0;
 		}
 		sr->checkpoints_offset *= 10;
@@ -284,10 +283,11 @@ static int parse_tail(struct scar_reader *sr, unsigned char *tail, size_t len)
 	}
 
 	if (*plain != '\n') {
-		free(d);
+		sr->comp.destroy_decompressor(d);
 		return 0;
 	}
 
+	sr->comp.destroy_decompressor(d);
 	return 1;
 }
 
@@ -391,8 +391,7 @@ struct scar_index_iterator *scar_reader_iterate(struct scar_reader *sr)
 	it->comp = &sr->comp;
 	it->decompressor = it->comp->create_decompressor(sr->raw_r);
 
-	scar_counting_reader_init(&it->counter, &it->decompressor->r);
-	scar_block_reader_init(&it->br, &it->counter.r);
+	scar_block_reader_init(&it->br, &it->decompressor->r);
 	scar_mem_writer_init(&it->buf);
 
 	const char *head = "SCAR-INDEX\n";
@@ -418,9 +417,12 @@ struct scar_index_iterator *scar_reader_iterate(struct scar_reader *sr)
 		SCAR_ERETURN(NULL);
 	}
 
-	it->next_offset = sr->index_offset + it->counter.count;
-	it->counter.count = 0;
 	it->seeker = sr->raw_s;
+	it->next_offset = it->seeker->tell(it->seeker);
+	if (it->next_offset < 0) {
+		scar_index_iterator_free(it);
+		SCAR_ERETURN(NULL);
+	}
 
 	return it;
 }
@@ -546,8 +548,11 @@ start:
 
 	entry->name = it->buf.buf;
 	entry->global = &it->global;
-	it->next_offset += it->counter.count;
-	it->counter.count = 0;
+	it->next_offset = it->seeker->tell(it->seeker);
+	if (it->next_offset < 0) {
+		SCAR_ERETURN(-1);
+	}
+
 	return 1;
 }
 
@@ -610,5 +615,10 @@ int scar_reader_read_content(
 
 void scar_reader_free(struct scar_reader *sr)
 {
+	if (sr->current_decomp) {
+		sr->comp.destroy_decompressor(sr->current_decomp);
+	}
+
+	free(sr->checkpoints);
 	free(sr);
 }

@@ -30,7 +30,7 @@ int cmd_tree(struct args *args, char **argv, int argc)
 
 	struct scar_index_entry entry;
 	while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
-		fprintf(stderr, "%s\n", entry.name);
+		fprintf(args->output.f, "%s\n", entry.name);
 	}
 
 	if (ret < 0) {

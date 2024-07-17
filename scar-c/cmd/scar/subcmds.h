@@ -6,6 +6,7 @@
 int cmd_ls(struct args *args, char **argv, int argc);
 int cmd_cat(struct args *args, char **argv, int argc);
 int cmd_tree(struct args *args, char **argv, int argc);
+int cmd_create(struct args *args, char **argv, int argc);
 int cmd_convert(struct args *args, char **argv, int argc);
 
 #endif

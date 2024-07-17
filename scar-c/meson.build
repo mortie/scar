@@ -48,6 +48,7 @@ executable(
   'cmd/scar/platform/' + system + '.c',
   'cmd/scar/subcmds/cat.c',
   'cmd/scar/subcmds/convert.c',
+  'cmd/scar/subcmds/create.c',
   'cmd/scar/subcmds/ls.c',
   'cmd/scar/subcmds/tree.c',
   'cmd/scar/main.c',

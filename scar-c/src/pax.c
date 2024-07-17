@@ -11,6 +11,11 @@
 #include "ustar.h"
 #include "internal-util.h"
 
+// Format truncation isn't a bug in this code.
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
 static int read_bytes_block_aligned(
 	void *buf, size_t size, struct scar_io_reader *r
 ) {

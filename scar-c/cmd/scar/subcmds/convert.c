@@ -18,7 +18,7 @@ int cmd_convert(struct args *args, char **argv, int argc)
 		goto err;
 	}
 
-	if (is_file_tty(args->output.f) && !args->force) {
+	if (scar_is_file_tty(args->output.f) && !args->force) {
 		fprintf(stderr, "Refusing to write to a TTY.\n");
 		fprintf(stderr, "Re-run with '--force' to ignore this check.\n");
 		goto err;
