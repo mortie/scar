@@ -10,9 +10,14 @@
 
 #include "../platform.h"
 
+// On Linux, minor/major is in sys/sysmacros.h,
+// while on the BSDs those macros are in sys/types.h
+#ifdef __linux__
+#include <sys/sysmacros.h>
+#endif
+
 #include <string.h>
 #include <errno.h>
-#include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>

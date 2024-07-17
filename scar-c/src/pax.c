@@ -13,6 +13,7 @@
 
 // Format truncation isn't a bug in this code.
 #ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 #endif
 
