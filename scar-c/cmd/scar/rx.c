@@ -73,20 +73,22 @@ struct rx *rx_build(const char *pattern, enum rx_opts opts)
 	rx->code = pcre2_compile(
 		(unsigned char *)rxstr, PCRE2_ZERO_TERMINATED, 0,
 		&err, &erroffset, NULL);
-	free(rxstr);
 
 	if (!rx->code) {
 		fprintf(stderr, "Failed to compile rx @ %zu: ", erroffset);
 		print_error(err);
 		fprintf(stderr, "\nRegex: %s\n", rxstr);
+		free(rxstr);
 		free(rx);
 		return NULL;
 	}
 
+	free(rxstr);
+
 	if ((err = pcre2_jit_compile(rx->code, PCRE2_JIT_COMPLETE)) < 0) {
 		fprintf(stderr, "Failed to JIT compile: ");
 		print_error(err);
-		fprintf(stderr, "\nRegex: %s\n", rxstr);
+		fprintf(stderr, "\n");
 	}
 
 	rx->match = pcre2_match_data_create(1, NULL);

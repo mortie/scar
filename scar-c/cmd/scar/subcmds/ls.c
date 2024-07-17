@@ -11,14 +11,15 @@
 static int do_print_roots(FILE *out, struct scar_reader *sr)
 {
 	int ret = 0;
-	struct scar_index_iterator *it = scar_reader_iterate(sr);
+	struct scar_index_iterator *it = NULL;
+	char *prev_root = NULL;
+	size_t prev_root_len = 0;
+
+	it = scar_reader_iterate(sr);
 	if (!it) {
 		fprintf(stderr, "Failed to create index iterator\n");
 		goto err;
 	}
-
-	char *prev_root = NULL;
-	size_t prev_root_len = 0;
 
 	struct scar_index_entry entry;
 	while ((ret = scar_index_iterator_next(it, &entry)) > 0) {
@@ -26,14 +27,24 @@ static int do_print_roots(FILE *out, struct scar_reader *sr)
 			!prev_root ||
 			strncmp(prev_root, entry.name, prev_root_len) != 0
 		) {
-			free(prev_root);
-			prev_root = strdup(entry.name);
-			prev_root_len = strlen(prev_root);
+			prev_root_len = strlen(entry.name);
+			char *new_prev_root = realloc(prev_root, prev_root_len + 1);
+			if (!new_prev_root) {
+				perror("realloc");
+				goto err;
+			}
+			memcpy(new_prev_root, entry.name, prev_root_len + 1);
+			prev_root = new_prev_root;
+
 			fprintf(out, "%s\n", entry.name);
 		}
 	}
 
 exit:
+	if (prev_root) {
+		free(prev_root);
+	}
+
 	if (it) {
 		scar_index_iterator_free(it);
 	}

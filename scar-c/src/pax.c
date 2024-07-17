@@ -12,8 +12,7 @@
 #include "internal-util.h"
 
 // Format truncation isn't a bug in this code.
-#ifdef __GNUC__
-#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 #endif
 
