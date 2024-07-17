@@ -9,6 +9,7 @@ project(
 cc = meson.get_compiler('c')
 m_dep = cc.find_library('m')
 zlib_dep = dependency('zlib')
+libpcre2_dep = dependency('libpcre2-8')
 
 args = []
 if get_option('trace-errors')
@@ -27,7 +28,7 @@ libscar = library(
   'src/scar-reader.c',
   'src/scar-writer.c',
   c_args: args,
-  dependencies: [zlib_dep, m_dep],
+  dependencies: [m_dep, zlib_dep],
   install: true,
   include_directories: 'include/scar',
 )
@@ -53,7 +54,7 @@ executable(
   'cmd/scar/subcmds/tree.c',
   'cmd/scar/main.c',
   'cmd/scar/rx.c',
-  dependencies: libscar_dep,
+  dependencies: [libscar_dep, libpcre2_dep],
   install: true,
 )
 

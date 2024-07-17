@@ -2,14 +2,29 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 #include <scar/scar.h>
 
-int build_regex(regex_t *reg, const char *pattern, enum rx_opts opts)
+struct rx {
+	pcre2_code *code;
+	pcre2_match_data *match;
+};
+
+static void print_error(int err)
+{
+	unsigned char errbuf[64] = "<unknown>";
+	pcre2_get_error_message(err, errbuf, sizeof(errbuf));
+	fprintf(stderr, "%s", (char *)errbuf);
+}
+
+static unsigned char *build_rx_string(const char *pattern, enum rx_opts opts)
 {
 	struct scar_mem_writer mw = {0};
 	scar_mem_writer_init(&mw);
-	scar_io_puts(&mw.w, "^(\\./)?");
 
 	const char *ptr = pattern;
 	char ch;
@@ -32,22 +47,76 @@ int build_regex(regex_t *reg, const char *pattern, enum rx_opts opts)
 	}
 
 	if (opts & RX_MATCH_DIR_ENTRIES) {
-		scar_io_puts(&mw.w, "(/[^/]+)?/?");
+		if (((char *)mw.buf)[mw.len - 1] == '/') {
+			scar_io_puts(&mw.w, "[^\\/]*/?");
+		} else {
+			scar_io_puts(&mw.w, "(/[^\\/]*)?/?");
+		}
 	}
 
-	scar_mem_writer_put(&mw, '$');
 	scar_mem_writer_put(&mw, '\0');
 
-	int err;
-	if ((err = regcomp(reg, mw.buf, REG_EXTENDED) != 0)) {
-		fprintf(stderr, "Invalid pattern: '%s'\n", pattern);
-		fprintf(stderr, "  Compiled regex: %s\n", (char *)mw.buf);
-		char errbuf[1024];
-		regerror(err, reg, errbuf, sizeof(errbuf));
-		fprintf(stderr, "  Error %d: %s\n", err, errbuf);
-		free(mw.buf);
-		return -1;
+	return mw.buf;
+}
+
+struct rx *rx_build(const char *pattern, enum rx_opts opts)
+{
+	struct rx *rx = malloc(sizeof(*rx));
+	if (!rx) {
+		perror("malloc");
+		return NULL;
 	}
 
-	return 0;
+	unsigned char *rxstr = build_rx_string(pattern, opts);
+	int err = 0;
+	size_t erroffset = 0;
+	rx->code = pcre2_compile(
+		(unsigned char *)rxstr, PCRE2_ZERO_TERMINATED, 0,
+		&err, &erroffset, NULL);
+	free(rxstr);
+
+	if (!rx->code) {
+		fprintf(stderr, "Failed to compile rx @ %zu: ", erroffset);
+		print_error(err);
+		fprintf(stderr, "\nRegex: %s\n", rxstr);
+		free(rx);
+		return NULL;
+	}
+
+	if ((err = pcre2_jit_compile(rx->code, PCRE2_JIT_COMPLETE)) < 0) {
+		fprintf(stderr, "Failed to JIT compile: ");
+		print_error(err);
+		fprintf(stderr, "\nRegex: %s\n", rxstr);
+	}
+
+	rx->match = pcre2_match_data_create(1, NULL);
+	if (!rx->match) {
+		fprintf(stderr, "Failed to create match data\n");
+		pcre2_code_free(rx->code);
+		free(rx);
+		return NULL;
+	}
+
+	return rx;
+}
+
+bool rx_match(struct rx *rx, const char *str)
+{
+	int ret = pcre2_match(
+		rx->code, (unsigned char *)str, PCRE2_ZERO_TERMINATED, 0,
+		PCRE2_ANCHORED | PCRE2_ENDANCHORED, rx->match, NULL);
+
+	if (ret < -1) {
+		fprintf(stderr, "Match error: ");
+		print_error(ret);
+		fprintf(stderr, "\n");
+	}
+
+	return ret >= 0;
+}
+
+void rx_free(struct rx *rx)
+{
+	pcre2_code_free(rx->code);
+	pcre2_match_data_free(rx->match);
 }

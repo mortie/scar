@@ -26,14 +26,14 @@ int cmd_cat(struct args *args, char **argv, int argc)
 	}
 
 	for (int i = 0; i < argc; ++i) {
-		regex_t rx;
-		if (build_regex(&rx, argv[i], 0) < 0) {
+		struct rx *rx = rx_build(argv[i], 0);
+		if (!rx) {
 			goto err;
 		}
 
 		it = scar_reader_iterate(sr);
 		if (it == NULL) {
-			regfree(&rx);
+			rx_free(rx);
 			fprintf(stderr, "Failed to create index iterator\n");
 			goto err;
 		}
@@ -44,7 +44,7 @@ int cmd_cat(struct args *args, char **argv, int argc)
 				continue;
 			}
 
-			if (regexec(&rx, entry.name, 0, NULL, 0) != 0) {
+			if (!rx_match(rx, entry.name)) {
 				continue;
 			}
 
@@ -62,7 +62,7 @@ int cmd_cat(struct args *args, char **argv, int argc)
 			}
 		}
 
-		regfree(&rx);
+		rx_free(rx);
 
 		if (ret < 0) {
 			fprintf(stderr, "Failed to iterate index\n");
