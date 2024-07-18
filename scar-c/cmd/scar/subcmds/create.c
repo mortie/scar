@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "../platform.h"
+#include "../util.h"
 
 static int create_file(
 	struct scar_writer *sw,
@@ -48,7 +49,7 @@ static int create_directory(
 		if (childpathsize < required_bufsize) {
 			childpath = realloc(childpath, required_bufsize);
 			if (!childpath) {
-				perror("realloc");
+				SCAR_PERROR("realloc");
 				goto err;
 			}
 
@@ -129,7 +130,7 @@ static int create_file(
 		pathlen += 2;
 		char *newpathbuf = realloc(pathbuf, pathlen + 1);
 		if (!newpathbuf) {
-			perror("realloc");
+			SCAR_PERROR("realloc");
 			goto err;
 		}
 		pathbuf = newpathbuf;
@@ -142,7 +143,7 @@ static int create_file(
 		pathlen += 1;
 		char *newpathbuf = realloc(pathbuf, pathlen + 1);
 		if (!newpathbuf) {
-			perror("realloc");
+			SCAR_PERROR("realloc");
 			goto err;
 		}
 		pathbuf = newpathbuf;
@@ -155,7 +156,7 @@ static int create_file(
 	if (meta->type == SCAR_FT_FILE) {
 		FILE *f = fopen(meta->path, "rb");
 		if (!f) {
-			perror(meta->path);
+			SCAR_PERROR(meta->path);
 			goto err;
 		}
 

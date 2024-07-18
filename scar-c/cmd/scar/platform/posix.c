@@ -27,6 +27,8 @@
 #include <unistd.h>
 #include <dirent.h>
 
+#include "../util.h"
+
 static int sort_alpha(const void *aptr, const void *bptr)
 {
 	char *const *a = aptr;
@@ -41,7 +43,7 @@ static char *read_symlink_at(int fd, const char *name, off_t size)
 	while (true) {
 		char *newbuf = realloc(buf, size + 1);
 		if (!newbuf) {
-			perror("realloc");
+			SCAR_PERROR("realloc");
 			free(buf);
 			return NULL;
 		}
@@ -49,7 +51,7 @@ static char *read_symlink_at(int fd, const char *name, off_t size)
 
 		ssize_t actual_size = readlinkat(fd, name, buf, size + 1);
 		if (actual_size < 0) {
-			perror("readlinkat");
+			SCAR_PERROR("readlinkat");
 			free(buf);
 			return NULL;
 		} else if (actual_size <= size) {
@@ -59,7 +61,7 @@ static char *read_symlink_at(int fd, const char *name, off_t size)
 
 		struct stat st;
 		if (fstatat(fd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
-			perror("fstatat");
+			SCAR_PERROR("fstatat");
 			free(buf);
 			return NULL;
 		}
@@ -83,7 +85,7 @@ struct scar_dir *scar_dir_open(const char *path)
 {
 	int fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		perror(path);
+		SCAR_PERROR(path);
 		return NULL;
 	}
 
@@ -95,7 +97,7 @@ struct scar_dir *scar_dir_open_at(struct scar_dir *dir, const char *name)
 	int fd = (int)(intptr_t)dir;
 	int subfd = openat(fd, name, O_RDONLY);
 	if (fd < 0) {
-		perror(name);
+		SCAR_PERROR(name);
 		return NULL;
 	}
 
@@ -111,14 +113,14 @@ char **scar_dir_list(struct scar_dir *dir)
 
 	int dupfd = dup(fd);
 	if (dupfd < 0) {
-		perror("dup");
+		SCAR_PERROR("dup");
 		goto err;
 	}
 
 	dirp = fdopendir(dupfd);
 	if (!dirp) {
 		close(dupfd);
-		perror("fdopendir");
+		SCAR_PERROR("fdopendir");
 		goto err;
 	}
 
@@ -126,7 +128,7 @@ char **scar_dir_list(struct scar_dir *dir)
 		errno = 0;
 		struct dirent *ent = readdir(dirp);
 		if (ent == NULL && errno) {
-			perror("readdir");
+			SCAR_PERROR("readdir");
 			goto err;
 		} else if (ent == NULL) {
 			break;
@@ -190,7 +192,7 @@ int scar_stat_at(struct scar_dir *dir, const char *name, struct scar_meta *meta)
 
 	struct stat st;
 	if (fstatat(fd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
-		perror("fstatat");
+		SCAR_PERROR("fstatat");
 		return -1;
 	}
 

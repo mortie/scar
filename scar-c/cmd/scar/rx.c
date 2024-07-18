@@ -9,6 +9,8 @@
 
 #include <scar/scar.h>
 
+#include "util.h"
+
 struct rx {
 	pcre2_code *code;
 	pcre2_match_data *match;
@@ -63,7 +65,7 @@ struct rx *rx_build(const char *pattern, enum rx_opts opts)
 {
 	struct rx *rx = malloc(sizeof(*rx));
 	if (!rx) {
-		perror("malloc");
+		SCAR_PERROR("malloc");
 		return NULL;
 	}
 

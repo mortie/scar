@@ -7,6 +7,7 @@
 #include <scar/scar.h>
 
 #include "../rx.h"
+#include "../util.h"
 
 static int do_print_roots(FILE *out, struct scar_reader *sr)
 {
@@ -30,7 +31,7 @@ static int do_print_roots(FILE *out, struct scar_reader *sr)
 			prev_root_len = strlen(entry.name);
 			char *new_prev_root = realloc(prev_root, prev_root_len + 1);
 			if (!new_prev_root) {
-				perror("realloc");
+				SCAR_PERROR("realloc");
 				goto err;
 			}
 			memcpy(new_prev_root, entry.name, prev_root_len + 1);
