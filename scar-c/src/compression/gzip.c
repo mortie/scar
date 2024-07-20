@@ -16,6 +16,7 @@ static const unsigned char EOF_MARKER[] = {
 
 struct gzip_compressor {
 	struct scar_compressor c;
+	int level;
 	struct scar_io_writer *w;
 	z_stream stream;
 	gz_header header;
@@ -58,7 +59,30 @@ static scar_ssize gzip_compressor_write(
 
 static int gzip_compressor_flush(struct scar_compressor *ptr)
 {
-	return (int)write_deflate((struct gzip_compressor *)ptr, NULL, 0, Z_FULL_FLUSH);
+	struct gzip_compressor *c = (struct gzip_compressor *)ptr;
+	if (write_deflate(c, NULL, 0, Z_FINISH) < 0) {
+		return -1;
+	}
+
+	deflateEnd(&c->stream);
+
+	c->stream.zalloc = Z_NULL;
+	c->stream.zfree = Z_NULL;
+	c->stream.opaque = Z_NULL;
+	if (deflateInit2(
+		&c->stream, c->level, Z_DEFLATED,
+		15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK
+	) {
+		SCAR_ERETURN(-1);
+	}
+
+	memset(&c->header, 0, sizeof(c->header));
+	c->header.os = 0xff;
+	if (deflateSetHeader(&c->stream, &c->header) != Z_OK) {
+		SCAR_ERETURN(-1);
+	}
+
+	return 0;
 }
 
 static int gzip_compressor_finish(struct scar_compressor *ptr)
@@ -78,7 +102,8 @@ static struct scar_compressor *create_gzip_compressor(
 	c->stream.zfree = Z_NULL;
 	c->stream.opaque = Z_NULL;
 	if (deflateInit2(
-		&c->stream, level, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK
+		&c->stream, level, Z_DEFLATED,
+		15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK
 	) {
 		free(c);
 		SCAR_ERETURN(NULL);
@@ -91,6 +116,7 @@ static struct scar_compressor *create_gzip_compressor(
 		SCAR_ERETURN(NULL);
 	}
 
+	c->level = level;
 	c->w = w;
 	c->c.w.write = gzip_compressor_write;
 	c->c.flush = gzip_compressor_flush;

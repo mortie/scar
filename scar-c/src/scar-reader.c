@@ -7,6 +7,7 @@
 
 #include "internal-util.h"
 #include "compression.h"
+#include "io.h"
 #include "ioutil.h"
 #include "pax.h"
 #include "types.h"
@@ -22,9 +23,7 @@ struct scar_reader {
 	struct scar_io_seeker *raw_s;
 	struct scar_compression comp;
 
-	struct scar_counting_reader decomp_counter;
 	struct scar_decompressor *current_decomp;
-	struct checkpoint current_offset;
 
 	bool has_checkpoints;
 	struct checkpoint *checkpoints;
@@ -170,34 +169,18 @@ static int reader_seek_to(struct scar_reader *sr, scar_offset offset_uc)
 		SCAR_ERETURN(-1);
 	}
 
-	if (
-		sr->current_offset.uncompressed <= offset_uc &&
-		sr->current_offset.uncompressed > chkpoint.uncompressed
-	) {
-		assert(sr->current_decomp);
-		if (sr->raw_s->seek(
-			sr->raw_s, sr->current_offset.compressed, SCAR_SEEK_START) < 0
-		) {
-			SCAR_ERETURN(-1);
-		}
-	} else {
-		if (sr->raw_s->seek(
-			sr->raw_s, chkpoint.compressed, SCAR_SEEK_START) < 0
-		) {
-			SCAR_ERETURN(-1);
-		}
-
-		if (sr->current_decomp) {
-			sr->comp.destroy_decompressor(sr->current_decomp);
-		}
-
-		sr->current_offset.uncompressed = chkpoint.uncompressed;
-		sr->current_offset.compressed = chkpoint.compressed;
-		sr->current_decomp = sr->comp.create_decompressor(
-			&sr->decomp_counter.r);
+	if (sr->current_decomp) {
+		sr->comp.destroy_decompressor(sr->current_decomp);
 	}
 
-	sr->decomp_counter.count = 0;
+	if (sr->raw_s->seek(sr->raw_s, chkpoint.compressed, SCAR_SEEK_START) < 0) {
+		SCAR_ERETURN(-1);
+	}
+
+	sr->current_decomp = sr->comp.create_decompressor(sr->raw_r);
+	if (!sr->current_decomp) {
+		SCAR_ERETURN(-1);
+	}
 
 	char buf[512];
 	scar_offset skip = offset_uc - chkpoint.uncompressed;
@@ -210,16 +193,12 @@ static int reader_seek_to(struct scar_reader *sr, scar_offset offset_uc)
 		scar_ssize ret = sr->current_decomp->r.read(
 			&sr->current_decomp->r, buf, n);
 		if (ret < (scar_ssize)n) {
-			sr->current_offset.uncompressed = -1;
-			sr->current_offset.compressed = -1;
 			SCAR_ERETURN(-1);
 		}
 
-		sr->current_offset.uncompressed += n;
 		skip -= n;
 	}
 
-	sr->current_offset.compressed += sr->decomp_counter.count;
 	return 0;
 }
 
@@ -358,9 +337,6 @@ struct scar_reader *scar_reader_create(
 		SCAR_ERETURN(NULL);
 	}
 
-	sr->current_offset.uncompressed = -1;
-	sr->current_offset.compressed = -1;
-	scar_counting_reader_init(&sr->decomp_counter, r);
 	sr->current_decomp = NULL;
 	sr->has_checkpoints = false;
 	sr->checkpoints = NULL;
@@ -579,15 +555,10 @@ int scar_reader_read_meta(
 	struct scar_counting_reader cr;
 	scar_counting_reader_init(&cr, &sr->current_decomp->r);
 
-	sr->decomp_counter.count = 0;
 	if (scar_pax_read_meta(&sr->current_decomp->r, &global2, meta) < 0) {
-		sr->current_offset.uncompressed = -1;
-		sr->current_offset.compressed = -1;
 		SCAR_ERETURN(-1);
 	}
 
-	sr->current_offset.compressed += sr->decomp_counter.count;
-	sr->current_offset.uncompressed += cr.count;
 	return 0;
 }
 
@@ -595,21 +566,14 @@ int scar_reader_read_content(
 	struct scar_reader *sr, struct scar_io_writer *w, uint64_t size
 ) {
 	assert(sr->current_decomp);
-	assert(sr->current_offset.uncompressed >= 0);
-	assert(sr->current_offset.compressed >= 0);
 
 	struct scar_counting_reader cr;
 	scar_counting_reader_init(&cr, &sr->current_decomp->r);
 
-	sr->decomp_counter.count = 0;
 	if (scar_pax_read_content(&cr.r, w, size) < 0) {
-		sr->current_offset.uncompressed = -1;
-		sr->current_offset.compressed = -1;
 		SCAR_ERETURN(-1);
 	}
 
-	sr->current_offset.compressed += sr->decomp_counter.count;
-	sr->current_offset.uncompressed += cr.count;
 	return 0;
 }
 
