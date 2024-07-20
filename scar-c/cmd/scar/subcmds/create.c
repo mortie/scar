@@ -36,7 +36,7 @@ static int ensure_path_format(struct scar_meta *meta, char **pathbuf)
 	return 0;
 }
 
-static int create_entry_in_dir(
+static int create_entry(
 	struct scar_writer *sw,
 	struct scar_dir *dir, 
 	const char *path,
@@ -138,7 +138,7 @@ static int create_directory_entry(
 		}
 
 		snprintf(subpath, len + 1, "%s%s", dirpath, *it);
-		if (create_entry_in_dir(sw, dir, subpath, *it) < 0) {
+		if (create_entry(sw, dir, subpath, *it) < 0) {
 			fprintf(stderr, "%s: Failed to create entry\n", subpath);
 			goto exit;
 		}
@@ -163,87 +163,11 @@ err:
 	goto exit;
 }
 
-static int create_entry(
-	struct scar_writer *sw,
-	const char *path
-) {
-	int ret = 0;
-	struct scar_meta meta = {0};
-	struct scar_file_handle fh = {0};
-	struct scar_dir *dir = NULL;
-	char *pathbuf = NULL;
-
-	if (scar_stat(path, &meta) < 0) {
-		fprintf(stderr, "%s: Failed to stat file\n", path);
-		goto err;
-	}
-
-	meta.path = (char *)path;
-	if (ensure_path_format(&meta, &pathbuf) < 0) {
-		goto err;
-	}
-
-	// Strip out leading '/'
-	// (a bunch of other tar/pax implementations seems to do that)
-	while (*meta.path && *meta.path == '/') {
-		fprintf(stderr, "Removing leading '/' from %s\n", meta.path);
-		meta.path += 1;
-	}
-
-	if (meta.type == SCAR_FT_FILE) {
-		scar_file_handle_init(&fh, fopen(path, "r"));
-		if (!fh.f) {
-			perror(path);
-			goto err;
-		}
-	}
-
-	if (scar_writer_write_entry(sw, &meta, &fh.r) < 0) {
-		fprintf(stderr, "%s: Failed to create entry\n", path);
-		goto err;
-	}
-
-	if (meta.type == SCAR_FT_DIRECTORY) {
-		dir = scar_dir_open(path);
-		if (!dir) {
-			fprintf(stderr, "%s: Failed to open dir\n", path);
-			goto err;
-		}
-
-		if (create_directory_entry(sw, dir, meta.path) < 0) {
-			fprintf(stderr, "%s: Failed to create dir\n", path);
-			goto err;
-		}
-	}
-
-exit:
-	if (pathbuf) {
-		free(pathbuf);
-	}
-
-	if (dir) {
-		scar_dir_close(dir);
-	}
-
-	if (fh.f) {
-		fclose(fh.f);
-	}
-
-	// We don't own meta.path, don't free it
-	meta.path = NULL;
-	scar_meta_destroy(&meta);
-
-	return ret;
-
-err:
-	ret = -1;
-	goto exit;
-}
-
 int cmd_create(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
 	struct scar_writer *sw = NULL;
+	struct scar_dir *dir = NULL;
 
 	if (argc == 0) {
 		fprintf(stderr, "Expected arguments\n");
@@ -262,8 +186,20 @@ int cmd_create(struct args *args, char **argv, int argc)
 		goto err;
 	}
 
+	if (args->chdir) {
+		dir = scar_dir_open(args->chdir);
+	} else {
+		dir = scar_dir_open_cwd();
+	}
+
 	for (int i = 0; i < argc; ++i) {
-		if (create_entry(sw, argv[i]) < 0) {
+		const char *path = argv[i];
+		while (*path && *path == '/') {
+			fprintf(stderr, "Removing leading '/' from %s\n", path);
+			path += 1;
+		}
+
+		if (create_entry(sw, dir, path, argv[i]) < 0) {
 			goto err;
 		}
 	}
@@ -274,6 +210,10 @@ int cmd_create(struct args *args, char **argv, int argc)
 	}
 
 exit:
+	if (dir) {
+		scar_dir_close(dir);
+	}
+
 	if (sw) {
 		scar_writer_free(sw);
 	}

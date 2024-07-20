@@ -20,13 +20,15 @@ static const char *usageText =
 	"  convert           Convert a tar/pax file to a scar file.\n"
 	"\n"
 	"Options:\n"
-	"  -i,--in    <file>  Input file (default: stdin)\n"
-	"  -o,--out   <file>  Output file (default: stdout)\n"
-	"  -c,--comp  <gzip>  Compression algorithm (default: gzip)\n"
-	"  -l,--level <level> Compression level (default: 6)\n"
-	"  -f,--force         Perform the task even if sanity checks fail\n"
-	"                     (for example, write binary data to stdout)\n"
-	"  -h,--help          Show this help output\n";
+	"  -i,--in        <file>  Input file (default: stdin)\n"
+	"  -o,--out       <file>  Output file (default: stdout)\n"
+	"  -c,--comp      <gzip>  Compression algorithm (default: gzip)\n"
+	"  -l,--level     <level> Compression level (default: 6)\n"
+	"  -C,--directory <path>  Create/extract archive relative to <path>\n"
+	"                         (does not affect -i/-o)\n"
+	"  -f,--force             Perform the task even if sanity checks fail\n"
+	"                         (for example, write binary data to stdout)\n"
+	"  -h,--help              Show this help output\n";
 
 static void usage(FILE *f, char *argv0)
 {
@@ -38,6 +40,19 @@ static bool streq(const char *a, const char *b)
 	return strcmp(a, b) == 0;
 }
 
+static char *dupstr(const char *str)
+{
+	size_t len = strlen(str);
+	char *buf = malloc(len + 1);
+	if (!buf) {
+		perror("malloc");
+		return NULL;
+	}
+
+	memcpy(buf, str, len + 1);
+	return buf;
+}
+
 int main(int argc, char **argv)
 {
 	char *argv0 = argv[0];
@@ -47,21 +62,23 @@ int main(int argc, char **argv)
 	scar_file_handle_init(&args.input, stdin);
 	scar_file_handle_init(&args.output, stdout);
 	scar_compression_init_gzip(&args.comp);
+	args.chdir = NULL;
 	args.level = 6;
 	args.force = false;
 
 	static struct option opts[] = {
-		{"in",    required_argument, NULL, 'i'},
-		{"out",   required_argument, NULL, 'o'},
-		{"comp" , required_argument, NULL, 'c'},
-		{"level", required_argument, NULL, 'l'},
-		{"force", no_argument,       NULL, 'f'},
-		{"help",  no_argument,       NULL, 'h'},
+		{"in",        required_argument, NULL, 'i'},
+		{"out",       required_argument, NULL, 'o'},
+		{"comp" ,     required_argument, NULL, 'c'},
+		{"level",     required_argument, NULL, 'l'},
+		{"directory", required_argument, NULL, 'C'},
+		{"force",     no_argument,       NULL, 'f'},
+		{"help",      no_argument,       NULL, 'h'},
 		{0},
 	};
 
 	int ch;
-	while ((ch = getopt_long(argc, argv, "i:o:c:l:fh", opts, NULL)) != -1) {
+	while ((ch = getopt_long(argc, argv, "i:o:c:l:C:fh", opts, NULL)) != -1) {
 		switch (ch) {
 		case 'i':
 			if (streq(optarg, "-")) {
@@ -93,6 +110,12 @@ int main(int argc, char **argv)
 			break;
 		case 'l':
 			args.level = atoi(optarg);
+			break;
+		case 'C':
+			args.chdir = dupstr(optarg);
+			if (!args.chdir) {
+				goto err;
+			}
 			break;
 		case 'f':
 			args.force = true;

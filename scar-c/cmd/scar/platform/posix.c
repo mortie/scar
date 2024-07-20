@@ -51,7 +51,7 @@ static char *read_symlink_at(int fd, const char *name, off_t size)
 
 		ssize_t actual_size = readlinkat(fd, name, buf, size + 1);
 		if (actual_size < 0) {
-			SCAR_PERROR("readlinkat");
+			SCAR_PERROR2("readlinkat", name);
 			free(buf);
 			return NULL;
 		} else if (actual_size <= size) {
@@ -61,7 +61,7 @@ static char *read_symlink_at(int fd, const char *name, off_t size)
 
 		struct stat st;
 		if (fstatat(fd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
-			SCAR_PERROR("fstatat");
+			SCAR_PERROR2("fstatat", name);
 			free(buf);
 			return NULL;
 		}
@@ -97,12 +97,18 @@ struct scar_dir *scar_dir_open_at(struct scar_dir *dir, const char *name)
 {
 	int dirfd = (int)(intptr_t)dir;
 	int subfd = openat(dirfd, name, O_RDONLY);
-	if (dirfd < 0) {
-		SCAR_PERROR(name);
+	if (subfd < 0) {
+		SCAR_PERROR2("openat", name);
 		return NULL;
 	}
 
 	return (struct scar_dir *)(intptr_t)subfd;
+}
+
+struct scar_dir *scar_dir_open_cwd(void)
+{
+	int dirfd = AT_FDCWD;
+	return (struct scar_dir *)(intptr_t)dirfd;
 }
 
 char **scar_dir_list(struct scar_dir *dir)
@@ -175,7 +181,9 @@ err:
 void scar_dir_close(struct scar_dir *dir)
 {
 	int dirfd = (int)(intptr_t)dir;
-	close(dirfd);
+	if (dirfd != AT_FDCWD) {
+		close(dirfd);
+	}
 }
 
 FILE *scar_open_at(struct scar_dir *dir, const char *name)
@@ -183,13 +191,13 @@ FILE *scar_open_at(struct scar_dir *dir, const char *name)
 	int dirfd = (int)(intptr_t)dir;
 	int fd = openat(dirfd, name, O_RDONLY);
 	if (fd < 0) {
-		perror("openat");
+		SCAR_PERROR2("openat", name);
 		return NULL;
 	}
 
 	FILE *f = fdopen(fd, "r");
 	if (!f) {
-		perror("fdopen");
+		SCAR_PERROR2("fdopen", name);
 		return NULL;
 	}
 
@@ -198,8 +206,8 @@ FILE *scar_open_at(struct scar_dir *dir, const char *name)
 
 int scar_stat(const char *path, struct scar_meta *meta)
 {
-	int fd = AT_FDCWD;
-	struct scar_dir *dir = (struct scar_dir *)(intptr_t)fd;
+	int dirfd = AT_FDCWD;
+	struct scar_dir *dir = (struct scar_dir *)(intptr_t)dirfd;
 	return scar_stat_at(dir, path, meta);
 }
 
@@ -211,7 +219,7 @@ int scar_stat_at(struct scar_dir *dir, const char *name, struct scar_meta *meta)
 
 	struct stat st;
 	if (fstatat(fd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
-		SCAR_PERROR("fstatat");
+		SCAR_PERROR2("fstatat", name);
 		return -1;
 	}
 

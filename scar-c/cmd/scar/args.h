@@ -9,6 +9,7 @@ struct args {
 	struct scar_file_handle input;
 	struct scar_file_handle output;
 	struct scar_compression comp;
+	char *chdir;
 	int level;
 	bool force;
 };

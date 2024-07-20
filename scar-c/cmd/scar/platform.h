@@ -11,6 +11,7 @@ bool scar_is_file_tty(FILE *f);
 
 struct scar_dir *scar_dir_open(const char *path);
 struct scar_dir *scar_dir_open_at(struct scar_dir *dir, const char *name);
+struct scar_dir *scar_dir_open_cwd(void);
 char **scar_dir_list(struct scar_dir *dir);
 void scar_dir_close(struct scar_dir *dir);
 
