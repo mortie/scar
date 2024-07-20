@@ -1,3 +1,8 @@
+// For fseeko/ftello
+#ifndef __WIN32
+#define _POSIX_C_SOURCE 200112L
+#endif
+
 #include "ioutil.h"
 
 #include <stdlib.h>
@@ -5,6 +10,16 @@
 
 #include "util.h"
 #include "internal-util.h"
+
+// The standard ftell/fseek is 32 bit on common platforms.
+// These SCAR_FSEEK/SCAR_FTELL macros will use 64-bit compatible variants.
+#ifdef _WIN32
+#define SCAR_FSEEK(f, o, w) _fseeki64(f, (__int64)(o), w)
+#define SCAR_FTELL(f) ((long long)_ftelli64(f))
+#else
+#define SCAR_FSEEK(f, o, w) fseeko(f, (off_t)(o), w)
+#define SCAR_FTELL(f) ((long long)ftello(f))
+#endif
 
 //
 // Utility functions
