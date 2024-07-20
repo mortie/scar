@@ -111,15 +111,13 @@ int scar_file_handle_seek(
 	struct scar_io_seeker *s, scar_offset offset, enum scar_io_whence whence
 ) {
 	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, s);
-	// TODO: Select fseek64 or fseeko based on platform
-	return fseek(sf->f, (long)offset, whences[whence]);
+	return SCAR_FSEEK(sf->f, (long)offset, whences[whence]);
 }
 
 scar_offset scar_file_handle_tell(struct scar_io_seeker *s)
 {
 	struct scar_file_handle *sf = SCAR_BASE(struct scar_file_handle, s);
-	// TODO: Select ftell64 or ftello based on platform
-	return ftell(sf->f);
+	return SCAR_FTELL(sf->f);
 }
 
 //
