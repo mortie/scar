@@ -8,6 +8,7 @@
 
 #include "subcmds.h"
 #include "args.h"
+#include "util.h"
 
 static const char *usageText =
 	"Usage: %s [options] <command> [args...]\n"
@@ -45,7 +46,7 @@ static char *dupstr(const char *str)
 	size_t len = strlen(str);
 	char *buf = malloc(len + 1);
 	if (!buf) {
-		perror("malloc");
+		SCAR_PERROR("malloc");
 		return NULL;
 	}
 

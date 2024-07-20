@@ -27,7 +27,7 @@ static int ensure_path_format(struct scar_meta *meta, char **pathbuf)
 
 	*pathbuf = malloc(len + 2);
 	if (!*pathbuf) {
-		perror("malloc");
+		SCAR_PERROR("malloc");
 		return -1;
 	}
 
@@ -129,7 +129,7 @@ static int create_directory_entry(
 		if (len > subpathlen) {
 			char *buf = realloc(subpath, len + 1);
 			if (!buf) {
-				perror("realloc");
+				SCAR_PERROR("realloc");
 				goto err;
 			}
 
