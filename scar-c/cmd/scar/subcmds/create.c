@@ -14,6 +14,28 @@ static int create_directory_entry(
 	const char *dirpath
 );
 
+static int ensure_path_format(struct scar_meta *meta, char **pathbuf)
+{
+	if (meta->type != SCAR_FT_DIRECTORY) {
+		return 0;
+	}
+
+	size_t len = strlen(meta->path);
+	if (meta->path[len - 1] == '/') {
+		return -1;
+	}
+
+	*pathbuf = malloc(len + 2);
+	if (!*pathbuf) {
+		perror("malloc");
+		return -1;
+	}
+
+	snprintf(*pathbuf, len + 2, "%s/", meta->path);
+	meta->path = *pathbuf;
+	return 0;
+}
+
 static int create_entry_in_dir(
 	struct scar_writer *sw,
 	struct scar_dir *dir, 
@@ -24,6 +46,7 @@ static int create_entry_in_dir(
 	struct scar_meta meta = {0};
 	struct scar_file_handle fh = {0};
 	struct scar_dir *subdir = NULL;
+	char *pathbuf = NULL;
 
 	if (scar_stat_at(dir, name, &meta) < 0) {
 		fprintf(stderr, "%s: Failed to stat file\n", path);
@@ -31,6 +54,9 @@ static int create_entry_in_dir(
 	}
 
 	meta.path = (char *)path;
+	if (ensure_path_format(&meta, &pathbuf) < 0) {
+		goto err;
+	}
 
 	if (meta.type == SCAR_FT_FILE) {
 		scar_file_handle_init(&fh, scar_open_at(dir, name));
@@ -59,6 +85,10 @@ static int create_entry_in_dir(
 	}
 
 exit:
+	if (pathbuf) {
+		free(pathbuf);
+	}
+
 	if (subdir) {
 		scar_dir_close(subdir);
 	}
@@ -141,6 +171,7 @@ static int create_entry(
 	struct scar_meta meta = {0};
 	struct scar_file_handle fh = {0};
 	struct scar_dir *dir = NULL;
+	char *pathbuf = NULL;
 
 	if (scar_stat(path, &meta) < 0) {
 		fprintf(stderr, "%s: Failed to stat file\n", path);
@@ -148,6 +179,9 @@ static int create_entry(
 	}
 
 	meta.path = (char *)path;
+	if (ensure_path_format(&meta, &pathbuf) < 0) {
+		goto err;
+	}
 
 	// Strip out leading '/'
 	// (a bunch of other tar/pax implementations seems to do that)
@@ -182,6 +216,10 @@ static int create_entry(
 	}
 
 exit:
+	if (pathbuf) {
+		free(pathbuf);
+	}
+
 	if (dir) {
 		scar_dir_close(dir);
 	}
