@@ -78,7 +78,7 @@ static int create_entry_in_dir(
 			goto err;
 		}
 
-		if (create_directory_entry(sw, subdir, path) < 0) {
+		if (create_directory_entry(sw, subdir, meta.path) < 0) {
 			fprintf(stderr, "%s: Failed to create dir\n", path);
 			goto err;
 		}
@@ -125,7 +125,7 @@ static int create_directory_entry(
 
 	size_t dirpathlen = strlen(dirpath);
 	for (char **it = ents; *it; ++it) {
-		size_t len = dirpathlen + 1 + strlen(*it);
+		size_t len = dirpathlen + strlen(*it);
 		if (len > subpathlen) {
 			char *buf = realloc(subpath, len + 1);
 			if (!buf) {
@@ -137,7 +137,7 @@ static int create_directory_entry(
 			subpathlen = len;
 		}
 
-		snprintf(subpath, len + 1, "%s/%s", dirpath, *it);
+		snprintf(subpath, len + 1, "%s%s", dirpath, *it);
 		if (create_entry_in_dir(sw, dir, subpath, *it) < 0) {
 			fprintf(stderr, "%s: Failed to create entry\n", subpath);
 			goto exit;
@@ -210,7 +210,7 @@ static int create_entry(
 			goto err;
 		}
 
-		if (create_directory_entry(sw, dir, path) < 0) {
+		if (create_directory_entry(sw, dir, meta.path) < 0) {
 			fprintf(stderr, "%s: Failed to create dir\n", path);
 			goto err;
 		}
