@@ -67,7 +67,8 @@ static char *read_symlink_at(int fd, const char *name, off_t size)
 		}
 
 		if ((st.st_mode & S_IFMT) != S_IFLNK) {
-			fprintf(stderr, "Symlink changed to non-symlink during readlink\n");
+			fprintf(
+				stderr, "Symlink changed to non-symlink during readlink\n");
 			free(buf);
 			return NULL;
 		}
@@ -83,20 +84,20 @@ bool scar_is_file_tty(FILE *f)
 
 struct scar_dir *scar_dir_open(const char *path)
 {
-	int fd = open(path, O_RDONLY);
-	if (fd < 0) {
+	int dirfd = open(path, O_RDONLY);
+	if (dirfd < 0) {
 		SCAR_PERROR(path);
 		return NULL;
 	}
 
-	return (struct scar_dir *)(intptr_t)fd;
+	return (struct scar_dir *)(intptr_t)dirfd;
 }
 
 struct scar_dir *scar_dir_open_at(struct scar_dir *dir, const char *name)
 {
-	int fd = (int)(intptr_t)dir;
-	int subfd = openat(fd, name, O_RDONLY);
-	if (fd < 0) {
+	int dirfd = (int)(intptr_t)dir;
+	int subfd = openat(dirfd, name, O_RDONLY);
+	if (dirfd < 0) {
 		SCAR_PERROR(name);
 		return NULL;
 	}
@@ -106,12 +107,12 @@ struct scar_dir *scar_dir_open_at(struct scar_dir *dir, const char *name)
 
 char **scar_dir_list(struct scar_dir *dir)
 {
-	int fd = (int)(intptr_t)dir;
+	int dirfd = (int)(intptr_t)dir;
 	DIR *dirp = NULL;
 	char **names = NULL;
 	size_t count = 0;
 
-	int dupfd = dup(fd);
+	int dupfd = dup(dirfd);
 	if (dupfd < 0) {
 		SCAR_PERROR("dup");
 		goto err;
@@ -173,8 +174,26 @@ err:
 
 void scar_dir_close(struct scar_dir *dir)
 {
-	int fd = (int)(intptr_t)dir;
-	close(fd);
+	int dirfd = (int)(intptr_t)dir;
+	close(dirfd);
+}
+
+FILE *scar_open_at(struct scar_dir *dir, const char *name)
+{
+	int dirfd = (int)(intptr_t)dir;
+	int fd = openat(dirfd, name, O_RDONLY);
+	if (fd < 0) {
+		perror("openat");
+		return NULL;
+	}
+
+	FILE *f = fdopen(fd, "r");
+	if (!f) {
+		perror("fdopen");
+		return NULL;
+	}
+
+	return f;
 }
 
 int scar_stat(const char *path, struct scar_meta *meta)

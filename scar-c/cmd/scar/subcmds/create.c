@@ -8,75 +8,53 @@
 #include "../platform.h"
 #include "../util.h"
 
-static int create_file(
+static int create_directory_entry(
 	struct scar_writer *sw,
 	struct scar_dir *dir,
-	const char *path,
-	struct scar_meta *meta
+	const char *dirpath
 );
 
-static int create_directory(
+static int create_entry_in_dir(
 	struct scar_writer *sw,
-	struct scar_dir *dir,
+	struct scar_dir *dir, 
 	const char *path,
-	size_t pathlen,
-	struct scar_meta *meta
+	const char *name
 ) {
 	int ret = 0;
-	char **ents = NULL;
-	char **it = NULL;
-	char *childpath = NULL;
-	size_t childpathsize = 0;
+	struct scar_meta meta = {0};
+	struct scar_file_handle fh = {0};
 	struct scar_dir *subdir = NULL;
 
-	ents = scar_dir_list(dir);
-	if (!ents) {
-		fprintf(stderr, "Failed to list contents of '%s'.\n", path);
+	if (scar_stat_at(dir, name, &meta) < 0) {
+		fprintf(stderr, "%s: Failed to stat file\n", path);
 		goto err;
 	}
 
-	for (it = ents; *it; ++it) {
-		char *ent = *it;
+	meta.path = (char *)path;
 
-		meta->path = NULL;
-		scar_meta_destroy(meta);
-		if (scar_stat_at(dir, ent, meta) < 0) {
-			fprintf(stderr, "Failed to stat '%s%s'.\n", path, ent);
+	if (meta.type == SCAR_FT_FILE) {
+		scar_file_handle_init(&fh, scar_open_at(dir, name));
+		if (!fh.f) {
+			fprintf(stderr, "%s: Failed to open\n", path);
+			goto err;
+		}
+	}
+
+	if (scar_writer_write_entry(sw, &meta, &fh.r) < 0) {
+		fprintf(stderr, "%s: Failed to create entry\n", path);
+		goto err;
+	}
+
+	if (meta.type == SCAR_FT_DIRECTORY) {
+		subdir = scar_dir_open_at(dir, name);
+		if (!subdir) {
+			fprintf(stderr, "%s: Failed to open dir\n", path);
 			goto err;
 		}
 
-		size_t required_bufsize = pathlen + strlen(ent) + 2;
-		if (childpathsize < required_bufsize) {
-			childpath = realloc(childpath, required_bufsize);
-			if (!childpath) {
-				SCAR_PERROR("realloc");
-				goto err;
-			}
-
-			childpathsize = required_bufsize;
-		}
-
-		if (meta->type == SCAR_FT_DIRECTORY) {
-			snprintf(childpath, childpathsize, "%s%s/", path, ent);
-			subdir = scar_dir_open_at(dir, ent);
-			if (!subdir) {
-				fprintf(stderr, "Failed to open dir '%s'.\n", childpath);
-				goto err;
-			}
-		} else {
-			snprintf(childpath, childpathsize, "%s%s", path, ent);
-		}
-
-		if (create_file(sw, subdir, childpath, meta) < 0) {
+		if (create_directory_entry(sw, subdir, path) < 0) {
+			fprintf(stderr, "%s: Failed to create dir\n", path);
 			goto err;
-		}
-
-		free(ent);
-		*it = NULL;
-
-		if (subdir) {
-			scar_dir_close(subdir);
-			subdir = NULL;
 		}
 	}
 
@@ -85,12 +63,64 @@ exit:
 		scar_dir_close(subdir);
 	}
 
-	if (childpath) {
-		free(childpath);
+	if (fh.f) {
+		fclose(fh.f);
+	}
+
+	// We don't own meta.path, don't free it
+	meta.path = NULL;
+	scar_meta_destroy(&meta);
+
+	return ret;
+
+err:
+	ret = -1;
+	goto exit;
+}
+
+static int create_directory_entry(
+	struct scar_writer *sw,
+	struct scar_dir *dir,
+	const char *dirpath
+) {
+	int ret = 0;
+	char **ents = NULL;
+	char *subpath = NULL;
+	size_t subpathlen = 0;
+
+	ents = scar_dir_list(dir);
+	if (!ents) {
+		goto err;
+	}
+
+	size_t dirpathlen = strlen(dirpath);
+	for (char **it = ents; *it; ++it) {
+		size_t len = dirpathlen + 1 + strlen(*it);
+		if (len > subpathlen) {
+			char *buf = realloc(subpath, len + 1);
+			if (!buf) {
+				perror("realloc");
+				goto err;
+			}
+
+			subpath = buf;
+			subpathlen = len;
+		}
+
+		snprintf(subpath, len + 1, "%s/%s", dirpath, *it);
+		if (create_entry_in_dir(sw, dir, subpath, *it) < 0) {
+			fprintf(stderr, "%s: Failed to create entry\n", subpath);
+			goto exit;
+		}
+	}
+
+exit:
+	if (subpath) {
+		free(subpath);
 	}
 
 	if (ents) {
-		for (; *it; ++it) {
+		for (char **it = ents; *it; ++it) {
 			free(*it);
 		}
 		free(ents);
@@ -103,89 +133,66 @@ err:
 	goto exit;
 }
 
-static int create_file(
+static int create_entry(
 	struct scar_writer *sw,
-	struct scar_dir *dir,
-	const char *path,
-	struct scar_meta *meta
+	const char *path
 ) {
 	int ret = 0;
+	struct scar_meta meta = {0};
 	struct scar_file_handle fh = {0};
-	char *pathbuf = NULL;
-	struct scar_dir *dirbuf = NULL;
+	struct scar_dir *dir = NULL;
 
-	if (!dir && meta->type == SCAR_FT_DIRECTORY) {
-		dirbuf = scar_dir_open(path);
-		if (!dirbuf) {
-			fprintf(stderr, "Failed to open directory '%s'\n", path);
-			goto err;
-		}
-
-		dir = dirbuf;
-	}
-
-	size_t pathlen = strlen(path);
-
-	if (path[0] != '/' && strncmp(path, "./", 2) != 0) {
-		pathlen += 2;
-		char *newpathbuf = realloc(pathbuf, pathlen + 1);
-		if (!newpathbuf) {
-			SCAR_PERROR("realloc");
-			goto err;
-		}
-		pathbuf = newpathbuf;
-
-		snprintf(pathbuf, pathlen + 1, "./%s", path);
-		path = pathbuf;
-	}
-
-	if (meta->type == SCAR_FT_DIRECTORY && path[pathlen - 1] != '/') {
-		pathlen += 1;
-		char *newpathbuf = realloc(pathbuf, pathlen + 1);
-		if (!newpathbuf) {
-			SCAR_PERROR("realloc");
-			goto err;
-		}
-		pathbuf = newpathbuf;
-
-		snprintf(pathbuf, pathlen + 1, "%s/", path);
-		path = pathbuf;
-	}
-
-	meta->path = (char *)path;
-	if (meta->type == SCAR_FT_FILE) {
-		FILE *f = fopen(meta->path, "rb");
-		if (!f) {
-			SCAR_PERROR(meta->path);
-			goto err;
-		}
-
-		scar_file_handle_init(&fh, f);
-	}
-
-	if (scar_writer_write_entry(sw, meta, &fh.r) < 0) {
-		fprintf(stderr, "Failed to write entry for '%s'\n", path);
+	if (scar_stat(path, &meta) < 0) {
+		fprintf(stderr, "%s: Failed to stat file\n", path);
 		goto err;
 	}
 
-	if (meta->type == SCAR_FT_DIRECTORY) {
-		if (create_directory(sw, dir, path, pathlen, meta) < 0) {
+	meta.path = (char *)path;
+
+	// Strip out leading '/'
+	// (a bunch of other tar/pax implementations seems to do that)
+	while (*meta.path && *meta.path == '/') {
+		meta.path += 1;
+	}
+
+	if (meta.type == SCAR_FT_FILE) {
+		scar_file_handle_init(&fh, fopen(path, "r"));
+		if (!fh.f) {
+			perror(path);
+			goto err;
+		}
+	}
+
+	if (scar_writer_write_entry(sw, &meta, &fh.r) < 0) {
+		fprintf(stderr, "%s: Failed to create entry\n", path);
+		goto err;
+	}
+
+	if (meta.type == SCAR_FT_DIRECTORY) {
+		dir = scar_dir_open(path);
+		if (!dir) {
+			fprintf(stderr, "%s: Failed to open dir\n", path);
+			goto err;
+		}
+
+		if (create_directory_entry(sw, dir, path) < 0) {
+			fprintf(stderr, "%s: Failed to create dir\n", path);
 			goto err;
 		}
 	}
 
 exit:
-	if (dirbuf) {
-		scar_dir_close(dirbuf);
+	if (dir) {
+		scar_dir_close(dir);
 	}
 
 	if (fh.f) {
 		fclose(fh.f);
 	}
 
-	if (pathbuf) {
-		free(pathbuf);
-	}
+	// We don't own meta.path, don't free it
+	meta.path = NULL;
+	scar_meta_destroy(&meta);
 
 	return ret;
 
@@ -198,7 +205,6 @@ int cmd_create(struct args *args, char **argv, int argc)
 {
 	int ret = 0;
 	struct scar_writer *sw = NULL;
-	struct scar_meta meta = {0};
 
 	if (argc == 0) {
 		fprintf(stderr, "Expected arguments\n");
@@ -218,14 +224,7 @@ int cmd_create(struct args *args, char **argv, int argc)
 	}
 
 	for (int i = 0; i < argc; ++i) {
-		meta.path = NULL;
-		scar_meta_destroy(&meta);
-		if (scar_stat(argv[i], &meta) < 0) {
-			fprintf(stderr, "Failed to stat '%s'.\n", argv[i]);
-			goto err;
-		}
-
-		if (create_file(sw, NULL, argv[i], &meta) < 0) {
+		if (create_entry(sw, argv[i]) < 0) {
 			goto err;
 		}
 	}
@@ -239,9 +238,6 @@ exit:
 	if (sw) {
 		scar_writer_free(sw);
 	}
-
-	meta.path = NULL;
-	scar_meta_destroy(&meta);
 
 	return ret;
 
