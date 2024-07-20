@@ -186,6 +186,7 @@ static int create_entry(
 	// Strip out leading '/'
 	// (a bunch of other tar/pax implementations seems to do that)
 	while (*meta.path && *meta.path == '/') {
+		fprintf(stderr, "Removing leading '/' from %s\n", meta.path);
 		meta.path += 1;
 	}
 
