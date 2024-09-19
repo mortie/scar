@@ -56,9 +56,12 @@ exit:
 	if (sw) {
 		scar_writer_free(sw);
 	}
+
 	scar_meta_destroy(&meta);
 	scar_meta_destroy(&global);
+
 	return ret;
+
 err:
 	ret = 1;
 	goto exit;

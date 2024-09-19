@@ -14,11 +14,15 @@ static const char *usageText =
 	"Usage: %s [options] <command> [args...]\n"
 	"\n"
 	"Commands:\n"
-	"  ls [files...]     List the contents of directories in the archive.\n"
-	"  cat <files...>    Read the contents of files in the archive.\n"
-	"  tree              List all the entries in the archive.\n"
-	"  create <files...> Create a new scar archive.\n"
-	"  convert           Convert a tar/pax file to a scar file.\n"
+	"  ls [files...]      List the contents of directories in the archive.\n"
+	"  cat <files...>     Read the contents of files in the archive.\n"
+	"  tree               List all the entries in the archive.\n"
+	"  create <files...>  Create a new scar archive.\n"
+	"  convert            Convert a tar/pax file to a scar file.\n"
+	"  extract [files...] Extract a scar archive.\n"
+	"  t                  Alias of tree.\n"
+	"  c <files...>       Alias of create.\n"
+	"  x [files...]       Alias of extract.\n"
 	"\n"
 	"Options:\n"
 	"  -i,--in        <file>  Input file (default: stdin)\n"
@@ -145,12 +149,14 @@ int main(int argc, char **argv)
 		ret = cmd_ls(&args, argv, argc);
 	} else if (streq(subcmd, "cat")) {
 		ret = cmd_cat(&args, argv, argc);
-	} else if (streq(subcmd, "tree")) {
+	} else if (streq(subcmd, "tree") || streq(subcmd, "t")) {
 		ret = cmd_tree(&args, argv, argc);
-	} else if (streq(subcmd, "create")) {
+	} else if (streq(subcmd, "create") || streq(subcmd, "c")) {
 		ret = cmd_create(&args, argv, argc);
 	} else if (streq(subcmd, "convert")) {
 		ret = cmd_convert(&args, argv, argc);
+	} else if (streq(subcmd, "extract") || streq(subcmd, "x")) {
+		ret = cmd_extract(&args, argv, argc);
 	} else {
 		fprintf(stderr, "Unknown subcommand: %s\n", subcmd);
 		usage(stderr, argv0);
@@ -161,10 +167,13 @@ exit:
 	if (args.input.f && args.input.f != stdin) {
 		fclose(args.input.f);
 	}
+
 	if (args.output.f && args.output.f != stdout) {
 		fclose(args.output.f);
 	}
+
 	return ret;
+
 err:
 	ret = 1;
 	goto exit;

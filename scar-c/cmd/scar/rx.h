@@ -8,6 +8,9 @@ struct rx;
 enum rx_opts {
 	// Match the contents of directories specified by a pattern
 	RX_MATCH_DIR_ENTRIES = 1 << 0,
+
+	// Match everything below a directory specified by a pattern
+	RX_MATCH_ALL_CHILDREN = 1 << 1,
 };
 
 struct rx *rx_build(const char *pattern, enum rx_opts opts);

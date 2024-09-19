@@ -72,13 +72,17 @@ int cmd_cat(struct args *args, char **argv, int argc)
 
 exit:
 	scar_meta_destroy(&meta);
+
 	if (it) {
 		scar_index_iterator_free(it);
 	}
+
 	if (sr) {
 		scar_reader_free(sr);
 	}
+
 	return ret;
+
 err:
 	ret = 1;
 	goto exit;

@@ -56,6 +56,14 @@ static unsigned char *build_rx_string(const char *pattern, enum rx_opts opts)
 		}
 	}
 
+	if (opts & RX_MATCH_ALL_CHILDREN) {
+		if (((char *)mw.buf)[mw.len - 1] == '/') {
+			scar_io_puts(&mw.w, ".*");
+		} else {
+			scar_io_puts(&mw.w, "(/.*)?");
+		}
+	}
+
 	scar_mem_writer_put(&mw, '\0');
 
 	return mw.buf;
